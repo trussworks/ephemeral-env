@@ -197,9 +197,7 @@ docker push "${MILMOVE_MIGRATE_IMG}"
 
 export REVIEW_BASE_DOMAIN=${ENV_NAME}.mymove.sandbox.truss.coffee
 
-milmove_dir=${PWD}
+export ECS_CLI_DEPLOY_DIR="${PWD}"
 
 cd "${eph_dir}"
 ts-node -P tsconfig.bin.json bin/milmove-eph.ts
-
-cd "${milmove_dir}"
