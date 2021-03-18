@@ -175,9 +175,9 @@ ECR_BASE=004351505091.dkr.ecr.us-west-2.amazonaws.com/milmove-docker-ecs
 export ENV_NAME=milmove-pr-${MILMOVE_PR}
 
 MILMOVE_MIGRATE_ECR=${ECR_BASE}/app-migrations
-MILMOVE_MIGRATE_IMG=${MILMOVE_MIGRATE_ECR}:${ENV_NAME}
+export MILMOVE_MIGRATE_IMG=${MILMOVE_MIGRATE_ECR}:${ENV_NAME}
 MILMOVE_ECR=${ECR_BASE}/app
-MILMOVE_IMG=${MILMOVE_ECR}:${ENV_NAME}
+export MILMOVE_IMG=${MILMOVE_ECR}:${ENV_NAME}
 
 aws ecr get-login-password --region "${AWS_REGION}" |
     docker login --username AWS --password-stdin "${MILMOVE_ECR}"
@@ -200,4 +200,4 @@ export REVIEW_BASE_DOMAIN=${ENV_NAME}.mymove.sandbox.truss.coffee
 export ECS_CLI_DEPLOY_DIR="${PWD}"
 
 cd "${eph_dir}"
-ts-node -P tsconfig.bin.json bin/milmove-eph.ts
+./node_modules/.bin/ts-node -P tsconfig.bin.json bin/milmove-eph.ts
