@@ -16,13 +16,17 @@ cd mymove
 # fetch the PR branch to pr_branch
 git fetch origin "pull/${MILMOVE_PR}/head":pr_branch
 git checkout pr_branch
+# set some milmove build environment variables before we muck with things
+export GIT_BRANCH="pr/${MILMOVE_PR}"
+GIT_COMMIT=$(git rev-list -1 HEAD)
+export GIT_COMMIT
 # add our private repo with our custom changes
 git remote add truss https://github.com/trussworks/mymove.git
 # fetch the branch with the mods needed for an ephemeral app
 git fetch truss adh-ephemeral-review
 # apply the commit with the changes. If this fails, the build will
 # fail and we can't start the app
-git cherry-pick 442490205
+git cherry-pick 442490205 --no-commit
 
 # HACK: set some environment variables from .envrc
 # could install direnv in AWS build env, but this is less work right
@@ -164,9 +168,6 @@ export ENV_NAME=milmove-pr-${MILMOVE_PR}
 MILMOVE_MIGRATE=${ECR_BASE}/app-migrations:${ENV_NAME}
 MILMOVE=${ECR_BASE}/app:${ENV_NAME}
 
-export GIT_BRANCH="pr/${MILMOVE_PR}"
-GIT_COMMIT=$(git rev-list -1 HEAD)
-export GIT_COMMIT
 docker build -t "${MILMOVE}" -f Dockerfile.reviewapp .
 docker build -t "${MILMOVE_MIGRATE}" -f Dockerfile.reviewapp --target migrate .
 
