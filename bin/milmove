@@ -1,11 +1,22 @@
 #!/bin/bash
 
-if [[ -z "$MILMOVE_PR" ]]; then
+# shellcheck disable=SC2153
+if [[ -z "${MILMOVE_PR}" ]]; then
     echo "Missing MILMOVE_PR" >&2
     exit 2
 fi
 
+if [[ -z "${AWS_REGION}" ]]; then
+    echo "Missing AWS_REGION" >&2
+    exit 2
+fi
+
 set -euo pipefail
+
+# install dependencies
+yarn
+
+eph_dir=${PWD}
 
 # create a directory for our work
 mkdir milmove_pr && cd milmove_pr
@@ -163,13 +174,32 @@ ECR_BASE=004351505091.dkr.ecr.us-west-2.amazonaws.com/milmove-docker-ecs
 
 export ENV_NAME=milmove-pr-${MILMOVE_PR}
 
-MILMOVE_MIGRATE=${ECR_BASE}/app-migrations:${ENV_NAME}
-MILMOVE=${ECR_BASE}/app:${ENV_NAME}
+MILMOVE_MIGRATE_ECR=${ECR_BASE}/app-migrations
+MILMOVE_MIGRATE_IMG=${MILMOVE_MIGRATE_ECR}:${ENV_NAME}
+MILMOVE_ECR=${ECR_BASE}/app
+MILMOVE_IMG=${MILMOVE_ECR}:${ENV_NAME}
 
-docker build -t "${MILMOVE}" -f Dockerfile.reviewapp .
-docker build -t "${MILMOVE_MIGRATE}" -f Dockerfile.reviewapp --target migrate .
+aws ecr get-login-password --region "${AWS_REGION}" |
+    docker login --username AWS --password-stdin "${MILMOVE_ECR}"
 
-docker push "${MILMOVE}"
-docker push "${MILMOVE_MIGRATE}"
+docker build -t "${MILMOVE_IMG}" \
+       --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
+       --build-arg "GIT_COMMIT=${GIT_COMMIT}" \
+       -f Dockerfile.reviewapp .
+docker build -t "${MILMOVE_MIGRATE_IMG}" \
+       --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
+       --build-arg "GIT_COMMIT=${GIT_COMMIT}" \
+       --target migrate \
+       -f Dockerfile.reviewapp .
+
+docker push "${MILMOVE_IMG}"
+docker push "${MILMOVE_MIGRATE_IMG}"
 
 export REVIEW_BASE_DOMAIN=${ENV_NAME}.mymove.sandbox.truss.coffee
+
+milmove_dir=${PWD}
+
+cd "${eph_dir}"
+ts-node -P tsconfig.bin.json bin/milmove-eph.ts
+
+cd "${milmove_dir}"

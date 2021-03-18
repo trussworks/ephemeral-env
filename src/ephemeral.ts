@@ -31,6 +31,7 @@ export type EphemeralEnvConfig = {
   targetPort: number
   healthCheckPath: string
   hostedZoneId: string
+  baseDomain: string
 }
 
 export type AlbSgConfig = {
@@ -325,7 +326,7 @@ export async function setupDns(cfg: EphemeralEnvConfig, albCfg: AlbConfig) {
         {
           Action: 'UPSERT',
           ResourceRecordSet: {
-            Name: `my-${cfg.envName}.mymove.sandbox.truss.coffee`,
+            Name: `my-${cfg.baseDomain}`,
             Type: 'A',
             AliasTarget: {
               HostedZoneId: albCfg.canonicalHostedZoneId,
@@ -348,7 +349,9 @@ export async function setupDns(cfg: EphemeralEnvConfig, albCfg: AlbConfig) {
   }
 }
 
-export async function createEphemeral(cfg: EphemeralEnvConfig) {
+export async function createEphemeral(
+  cfg: EphemeralEnvConfig
+): Promise<TargetGroupConfig> {
   try {
     const sgCfg = await createSecurityGroup(cfg)
     const albConfig = await createALBAndUpdateSG(cfg, sgCfg)
@@ -357,19 +360,7 @@ export async function createEphemeral(cfg: EphemeralEnvConfig) {
     console.log('tgConfig', tgConfig)
     const rrStatus = await setupDns(cfg, albConfig)
     console.log('rrStatus', rrStatus)
-    console.log('')
-    console.log(`ecs-cli up --launch-type FARGATE --region ${cfg.region} \\`)
-    console.log(` -c ${cfg.envName} --vpc ${cfg.vpcId} \\`)
-    console.log(` -subnets ${cfg.subnetIds.join(',')}`)
-    console.log('')
-
-    console.log(`ecs-cli compose --file docker-compose.ecs.yml \\`)
-    console.log(' --project-name milmove service up \\')
-    console.log(` --create-log-groups --cluster ${cfg.envName} \\`)
-    console.log(' --launch-type FARGATE --target-groups \\')
-    console.log(
-      ` targetGroupArn=${tgConfig.arn},containerName=${cfg.targetContainer},containerPort=${cfg.targetPort}`
-    )
+    return Promise.resolve(tgConfig)
   } catch (error) {
     return Promise.reject(error)
   }
