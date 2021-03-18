@@ -157,7 +157,7 @@ export EIA_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 export CLOUD_FRONT_PRIVATE_KEY=replace
 export CLOUD_FRONT_KEY_ID=replace
 
-HACK: hardcode milmove AWS info
+# HACK: hardcode milmove AWS info
 
 ECR_BASE=004351505091.dkr.ecr.us-west-2.amazonaws.com/milmove-docker-ecs
 
