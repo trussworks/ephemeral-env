@@ -182,18 +182,18 @@ export MILMOVE_IMG=${MILMOVE_ECR}:${ENV_NAME}
 aws ecr get-login-password --region "${AWS_REGION}" |
     docker login --username AWS --password-stdin "${MILMOVE_ECR}"
 
-docker build -t "${MILMOVE_IMG}" \
-       --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
-       --build-arg "GIT_COMMIT=${GIT_COMMIT}" \
-       -f Dockerfile.reviewapp .
-docker build -t "${MILMOVE_MIGRATE_IMG}" \
-       --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
-       --build-arg "GIT_COMMIT=${GIT_COMMIT}" \
-       --target migrate \
-       -f Dockerfile.reviewapp .
+# docker build -t "${MILMOVE_IMG}" \
+#        --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
+#        --build-arg "GIT_COMMIT=${GIT_COMMIT}" \
+#        -f Dockerfile.reviewapp .
+# docker build -t "${MILMOVE_MIGRATE_IMG}" \
+#        --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
+#        --build-arg "GIT_COMMIT=${GIT_COMMIT}" \
+#        --target migrate \
+#        -f Dockerfile.reviewapp .
 
-docker push "${MILMOVE_IMG}"
-docker push "${MILMOVE_MIGRATE_IMG}"
+# docker push "${MILMOVE_IMG}"
+# docker push "${MILMOVE_MIGRATE_IMG}"
 
 export REVIEW_BASE_DOMAIN=${ENV_NAME}.mymove.sandbox.truss.coffee
 
