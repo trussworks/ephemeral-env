@@ -70,8 +70,6 @@ export LOGIN_GOV_ADMIN_CLIENT_ID="urn:gov:gsa:openidconnect.profiles:sp:sso:dod:
 export LOGIN_GOV_ENGADMIN_CLIENT_ID="urn:gov:gsa:openidconnect.profiles:sp:sso:dod:engadminmovemillocal"
 export LOGIN_GOV_HOSTNAME="idp.int.identitysandbox.gov"
 
-require LOGIN_GOV_SECRET_KEY "See 'DISABLE_AWS_VAULT_WRAPPER=1 AWS_REGION=us-gov-west-1 aws-vault exec transcom-gov-dev -- chamber read app-devlocal login_gov_secret_key'"
-
 # JSON Web Token (JWT) config
 CLIENT_AUTH_SECRET_KEY=$(cat config/tls/devlocal-client_auth_secret.key)
 export CLIENT_AUTH_SECRET_KEY
