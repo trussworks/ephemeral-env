@@ -48,6 +48,8 @@ async function main() {
     process.chdir(ecsCliDeployDir)
 
     const createClusterCmd = child.spawnSync('ecs-cli', [
+      'up',
+      '--force',
       '--launch-type',
       'FARGATE',
       '--region',
