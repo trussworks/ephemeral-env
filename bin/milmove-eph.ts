@@ -44,6 +44,7 @@ async function main() {
 
   try {
     const tgConfig = await createEphemeral(cfg)
+    console.log(tgConfig)
 
     process.chdir(ecsCliDeployDir)
 
