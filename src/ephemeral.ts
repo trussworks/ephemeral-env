@@ -220,7 +220,7 @@ export async function createALBAndUpdateSG(
         },
         {
           Name: 'group-id',
-          Values: [albSgCfg.groupId],
+          Values: [cfg.defaultSecurityGroupId],
         },
       ],
     })
@@ -230,8 +230,21 @@ export async function createALBAndUpdateSG(
       console.log('sgdo', sgDataWithOwner)
       if (
         sgDataWithOwner.SecurityGroups !== undefined &&
-        sgDataWithOwner.SecurityGroups.length === 1
+        sgDataWithOwner.SecurityGroups.length === 1 &&
+        sgDataWithOwner.SecurityGroups[0].IpPermissions !== undefined &&
+        sgDataWithOwner.SecurityGroups[0].IpPermissions.length > 0 &&
+        sgDataWithOwner.SecurityGroups[0].IpPermissions.find(
+          perm =>
+            perm.UserIdGroupPairs !== undefined &&
+            perm.UserIdGroupPairs.find(
+              pair => pair['GroupId'] === albSgCfg.groupId
+            )
+        )
       ) {
+        console.log(
+          'has existing default ingress rule perms',
+          JSON.stringify(sgDataWithOwner.SecurityGroups[0].IpPermissions)
+        )
         hasDefaultIngressRule = true
       }
     } catch (error) {

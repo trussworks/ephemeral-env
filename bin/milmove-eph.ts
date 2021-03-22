@@ -93,6 +93,7 @@ async function main() {
     }
   } catch (error) {
     console.log('error', error)
+    process.exit(1)
   }
 }
 
