@@ -169,7 +169,50 @@ export async function createALBAndUpdateSG(
       }
     }
 
-    const existingSgIngress = new DescribeSecurityGroupsCommand({
+    const ec2Client = new EC2Client({ region: cfg.region })
+
+    const existingLbIngress = new DescribeSecurityGroupsCommand({
+      Filters: [
+        {
+          Name: 'group-id',
+          Values: [albSgCfg.groupId],
+        },
+      ],
+    })
+    let hasLbIngressRule = false
+    try {
+      const sgDataWithOwner = await ec2Client.send(existingLbIngress)
+      console.log('sgdo', sgDataWithOwner)
+      if (
+        sgDataWithOwner.SecurityGroups !== undefined &&
+        sgDataWithOwner.SecurityGroups.length === 1 &&
+        sgDataWithOwner.SecurityGroups[0].IpPermissions !== undefined &&
+        sgDataWithOwner.SecurityGroups[0].IpPermissions.length == 1
+      ) {
+        hasLbIngressRule = true
+      }
+    } catch (error) {
+      console.log('error getting lb ingress rule', error)
+      hasLbIngressRule = false
+    }
+
+    if (hasLbIngressRule) {
+      console.log('has existing lb ingress rule')
+    } else {
+      const inputCmd = new AuthorizeSecurityGroupIngressCommand({
+        GroupId: albSgCfg.groupId,
+        IpPermissions: [
+          {
+            IpProtocol: '-1',
+            IpRanges: [{ CidrIp: '0.0.0.0/0' }],
+          },
+        ],
+      })
+      const lbIngressData = await ec2Client.send(inputCmd)
+      console.log('lbIngressData', lbIngressData)
+    }
+
+    const existingDefaultIngress = new DescribeSecurityGroupsCommand({
       Filters: [
         {
           Name: 'vpc-id',
@@ -181,39 +224,25 @@ export async function createALBAndUpdateSG(
         },
       ],
     })
-    const ec2Client = new EC2Client({ region: cfg.region })
-
-    let hasIngressRule = false
+    let hasDefaultIngressRule = false
     try {
-      const sgDataWithOwner = await ec2Client.send(existingSgIngress)
+      const sgDataWithOwner = await ec2Client.send(existingDefaultIngress)
       console.log('sgdo', sgDataWithOwner)
       if (
         sgDataWithOwner.SecurityGroups !== undefined &&
         sgDataWithOwner.SecurityGroups.length === 1
       ) {
-        hasIngressRule = true
+        hasDefaultIngressRule = true
       }
     } catch (error) {
       console.log('error getting ingress rule', error)
-      hasIngressRule = false
+      hasDefaultIngressRule = false
     }
 
-    if (hasIngressRule) {
-      console.log('has existing ingress rule')
+    if (hasDefaultIngressRule) {
+      console.log('has existing default ingress rule')
       return Promise.resolve(albConfig)
     }
-
-    const inputCmd = new AuthorizeSecurityGroupIngressCommand({
-      GroupId: albSgCfg.groupId,
-      IpPermissions: [
-        {
-          IpProtocol: '-1',
-          IpRanges: [{ CidrIp: '0.0.0.0/0' }],
-        },
-      ],
-    })
-    const iData = await ec2Client.send(inputCmd)
-    console.log('iData', iData)
 
     // allow traffic from lb
     const lbInputCmd = new AuthorizeSecurityGroupIngressCommand({
