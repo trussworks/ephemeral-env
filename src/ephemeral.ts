@@ -237,9 +237,9 @@ export async function createALBAndUpdateSG(
           perm =>
             perm.UserIdGroupPairs !== undefined &&
             perm.UserIdGroupPairs.find(
-              pair => pair['GroupId'] === albSgCfg.groupId
+              pair => pair.GroupId === albSgCfg.groupId
             )
-        )
+        ) !== undefined
       ) {
         console.log(
           'has existing default ingress rule perms',
