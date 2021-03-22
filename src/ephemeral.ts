@@ -284,9 +284,11 @@ export async function createAlbListener(
       existingTg.TargetGroups.length === 1 &&
       existingTg.TargetGroups[0].TargetGroupArn !== undefined
     ) {
-      return Promise.resolve({
+      const tgConfig = {
         arn: existingTg.TargetGroups[0].TargetGroupArn,
-      })
+      }
+      console.log('Returning existing TG', tgConfig)
+      return Promise.resolve(tgConfig)
     }
   } catch (error) {}
 
