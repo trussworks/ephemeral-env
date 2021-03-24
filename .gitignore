@@ -2,3 +2,4 @@
 /.npmglobal
 /.log
 /milmove_pr
+/.envrc.local
