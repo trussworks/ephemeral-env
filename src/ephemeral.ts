@@ -3,8 +3,10 @@ import {
   CreateListenerCommand,
   CreateLoadBalancerCommand,
   CreateTargetGroupCommand,
+  CreateRuleCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
+  DescribeRulesCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2'
 
 import {
@@ -32,6 +34,7 @@ export type EphemeralEnvConfig = {
   healthCheckPath: string
   hostedZoneId: string
   baseDomain: string
+  albListenerConfig?: AlbListenerConfig
 }
 
 export type AlbSgConfig = {
@@ -43,6 +46,16 @@ export type AlbConfig = {
   arn: string
   dnsName: string
   canonicalHostedZoneId: string
+}
+
+export type AlbListenerConfig = {
+  arn: string
+  albListenerArn: string
+}
+
+export type AlbAndTgConfig = {
+  albConfig: AlbConfig
+  tgConfig: TargetGroupConfig
 }
 
 export type TargetGroupConfig = {
@@ -360,6 +373,161 @@ export async function createAlbListener(
   return Promise.resolve(tgConfig)
 }
 
+export async function createAlbRule(
+  cfg: EphemeralEnvConfig,
+  albCfg: AlbListenerConfig
+): Promise<AlbAndTgConfig> {
+  const elbClient = new ElasticLoadBalancingV2Client({ region: cfg.region })
+
+  const describeCmd = new DescribeLoadBalancersCommand({
+    LoadBalancerArns: [albCfg.arn],
+  })
+
+  let albConfig: AlbConfig | undefined
+
+  try {
+    const albData = await elbClient.send(describeCmd)
+    if (
+      albData.LoadBalancers !== undefined &&
+      albData.LoadBalancers.length === 1 &&
+      albData.LoadBalancers[0].LoadBalancerArn !== undefined &&
+      albData.LoadBalancers[0].DNSName !== undefined &&
+      albData.LoadBalancers[0].CanonicalHostedZoneId !== undefined
+    ) {
+      albConfig = {
+        arn: albData.LoadBalancers[0].LoadBalancerArn,
+        dnsName: albData.LoadBalancers[0].DNSName,
+        canonicalHostedZoneId: albData.LoadBalancers[0].CanonicalHostedZoneId,
+      }
+    }
+  } catch (error) {
+    console.log('Cannot get Alb Data', error)
+    return Promise.reject(error)
+  }
+
+  if (albConfig === undefined) {
+    return Promise.reject('Cannot get ALB data')
+  }
+
+  const dtgCmd = new DescribeTargetGroupsCommand({
+    LoadBalancerArn: albCfg.arn,
+    Names: [`${cfg.envName}-tg`],
+  })
+
+  let tgConfig: TargetGroupConfig | undefined
+
+  try {
+    const existingTg = await elbClient.send(dtgCmd)
+    if (
+      existingTg.TargetGroups !== undefined &&
+      existingTg.TargetGroups.length === 1 &&
+      existingTg.TargetGroups[0].TargetGroupArn !== undefined
+    ) {
+      tgConfig = {
+        arn: existingTg.TargetGroups[0].TargetGroupArn,
+      }
+    }
+  } catch (error) {
+    console.log('Cannot get existing tg', error)
+    tgConfig = undefined
+  }
+
+  if (tgConfig === undefined) {
+    const tgCmd = new CreateTargetGroupCommand({
+      Name: `${cfg.envName}-tg`,
+      Protocol: 'HTTP',
+      Port: cfg.targetPort,
+      HealthCheckPort: `${cfg.targetPort}`,
+      HealthCheckPath: cfg.healthCheckPath,
+      HealthCheckIntervalSeconds: 90,
+      HealthCheckTimeoutSeconds: 60,
+      TargetType: 'ip',
+      VpcId: cfg.vpcId,
+    })
+
+    try {
+      const tgData = await elbClient.send(tgCmd)
+      console.log('tgData', tgData)
+      if (
+        tgData.TargetGroups !== undefined &&
+        tgData.TargetGroups.length == 1 &&
+        tgData.TargetGroups[0].TargetGroupArn !== undefined
+      ) {
+        tgConfig = {
+          arn: tgData.TargetGroups[0].TargetGroupArn,
+        }
+      }
+    } catch (error) {
+      return Promise.reject(error)
+    }
+  }
+
+  if (tgConfig === undefined) {
+    return Promise.reject('Cannot find or create target group')
+  }
+
+  const dRuleCmd = new DescribeRulesCommand({
+    ListenerArn: albCfg.albListenerArn,
+    PageSize: 100,
+  })
+
+  let priorityCount = 10
+  try {
+    const rules = await elbClient.send(dRuleCmd)
+    if (rules !== undefined && rules.Rules !== undefined) {
+      const ruleExists =
+        rules.Rules.find(
+          rule =>
+            rule.Conditions !== undefined &&
+            rule.Conditions.find(
+              cond =>
+                cond.HostHeaderConfig !== undefined &&
+                cond.HostHeaderConfig.Values !== undefined &&
+                cond.HostHeaderConfig.Values.includes(`*-${cfg.baseDomain}`)
+            )
+        ) !== undefined
+      if (ruleExists) {
+        return Promise.resolve({
+          albConfig: albConfig,
+          tgConfig: tgConfig,
+        })
+      }
+      priorityCount += rules.Rules.length
+    }
+  } catch (error) {
+    console.log('Error getting rules', error)
+  }
+
+  const ruleCmd = new CreateRuleCommand({
+    Actions: [
+      {
+        Type: 'forward',
+        TargetGroupArn: tgConfig.arn,
+      },
+    ],
+    Conditions: [
+      {
+        Field: 'host-header',
+        HostHeaderConfig: {
+          Values: [`*-${cfg.baseDomain}`],
+        },
+      },
+    ],
+    Priority: priorityCount,
+    ListenerArn: albCfg.albListenerArn,
+  })
+  try {
+    const lData = await elbClient.send(ruleCmd)
+    console.log('lData', lData)
+  } catch (error) {
+    return Promise.reject(error)
+  }
+  return Promise.resolve({
+    albConfig: albConfig,
+    tgConfig: tgConfig,
+  })
+}
+
 export async function setupDns(cfg: EphemeralEnvConfig, albCfg: AlbConfig) {
   const client = new Route53Client({ region: cfg.region })
 
@@ -393,7 +561,7 @@ export async function setupDns(cfg: EphemeralEnvConfig, albCfg: AlbConfig) {
   }
 }
 
-export async function createEphemeral(
+export async function createEphemeralNewAlb(
   cfg: EphemeralEnvConfig
 ): Promise<TargetGroupConfig> {
   try {
@@ -405,6 +573,21 @@ export async function createEphemeral(
     const rrStatus = await setupDns(cfg, albConfig)
     console.log('rrStatus', rrStatus)
     return Promise.resolve(tgConfig)
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
+
+export async function createEphemeralExistingAlb(
+  cfg: EphemeralEnvConfig,
+  albListenerCfg: AlbListenerConfig
+): Promise<TargetGroupConfig> {
+  try {
+    const albAndTgConfig = await createAlbRule(cfg, albListenerCfg)
+    console.log('albAndTgConfig', albAndTgConfig)
+    const rrStatus = await setupDns(cfg, albAndTgConfig.albConfig)
+    console.log('rrStatus', rrStatus)
+    return Promise.resolve(albAndTgConfig.tgConfig)
   } catch (error) {
     return Promise.reject(error)
   }

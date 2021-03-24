@@ -1,5 +1,18 @@
 import * as child from 'child_process'
-import { EphemeralEnvConfig, createEphemeral } from '../src/ephemeral'
+import {
+  EphemeralEnvConfig,
+  //  createEphemeralNewAlb,
+  createEphemeralExistingAlb,
+} from '../src/ephemeral'
+
+async function doAlbStuff(cfg: EphemeralEnvConfig) {
+  if (cfg.albListenerConfig !== undefined) {
+    return createEphemeralExistingAlb(cfg, cfg.albListenerConfig)
+  } else {
+    return Promise.reject('DREW DEBUG SHOULD NOT HAPPEN')
+    //return createEphemeralNewAlb(cfg)
+  }
+}
 
 async function main() {
   const region = process.env['AWS_REGION']
@@ -40,10 +53,16 @@ async function main() {
     targetPort: 4000,
     healthCheckPath: '/health',
     hostedZoneId: 'ZF5E6T2ONJR1H',
+    albListenerConfig: {
+      arn:
+        'arn:aws:elasticloadbalancing:us-west-2:004351505091:loadbalancer/app/milmove-one-alb/6c6e765f132b5a3c',
+      albListenerArn:
+        'arn:aws:elasticloadbalancing:us-west-2:004351505091:listener/app/milmove-one-alb/6c6e765f132b5a3c/c4c6d3077eea76f0',
+    },
   }
 
   try {
-    const tgConfig = await createEphemeral(cfg)
+    const tgConfig = await doAlbStuff(cfg)
     console.log(tgConfig)
 
     process.chdir(ecsCliDeployDir)
