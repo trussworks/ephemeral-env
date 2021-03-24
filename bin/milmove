@@ -19,7 +19,7 @@ yarn
 eph_dir=${PWD}
 
 # create a directory for our work
-mkdir milmove_pr && cd milmove_pr
+rm -rf milmove_pr && mkdir milmove_pr && cd milmove_pr
 
 # checkout the original repo with depth 1 to maybe transfer less data
 git clone --depth 1 https://github.com/transcom/mymove.git
@@ -37,7 +37,7 @@ git remote add truss https://github.com/trussworks/mymove.git
 git fetch truss adh-ephemeral-review
 # apply the commit with the changes. If this fails, the build will
 # fail and we can't start the app
-git cherry-pick 442490205 --no-commit
+git cherry-pick 30af39d47 --no-commit
 
 # HACK: set some environment variables from .envrc
 # could install direnv in AWS build env, but this is less work right
