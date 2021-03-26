@@ -22,6 +22,12 @@ import {
   ChangeResourceRecordSetsCommand,
 } from '@aws-sdk/client-route-53'
 
+import {
+  CodeBuildClient,
+  StartBuildCommand,
+  BatchGetBuildsCommand,
+} from '@aws-sdk/client-codebuild'
+
 export type EphemeralEnvConfig = {
   region: string
   envName: string
@@ -35,6 +41,12 @@ export type EphemeralEnvConfig = {
   hostedZoneId: string
   baseDomain: string
   albListenerConfig?: AlbListenerConfig
+}
+
+export type BuildConfig = {
+  region: string
+  dockerUsername: string
+  dockerPassword: string
 }
 
 export type AlbSgConfig = {
@@ -593,9 +605,88 @@ export async function createEphemeralExistingAlb(
   }
 }
 
-export async function debug(cfg: EphemeralEnvConfig) {
-  const client = new EC2Client({ region: cfg.region })
-  const dsg = new DescribeSecurityGroupsCommand({})
-  const r = await client.send(dsg)
-  console.log(JSON.stringify(r))
+export async function startMilmoveBuild(
+  cfg: BuildConfig,
+  pr: string,
+  token: string
+): Promise<string> {
+  const client = new CodeBuildClient({ region: cfg.region })
+  const buildCmd = new StartBuildCommand({
+    projectName: 'milmove-ephemeral',
+    idempotencyToken: token,
+    environmentVariablesOverride: [
+      {
+        name: 'MILMOVE_PR',
+        value: pr,
+      },
+      {
+        name: 'DOCKER_USERNAME',
+        value: cfg.dockerUsername,
+      },
+      {
+        name: 'DOCKER_PASSWORD',
+        value: cfg.dockerPassword,
+      },
+      {
+        name: 'BUILD_TOKEN',
+        value: token,
+      },
+    ],
+  })
+  try {
+    const buildResult = await client.send(buildCmd)
+    console.log('buildResult', buildResult)
+    if (
+      buildResult === undefined ||
+      buildResult.build === undefined ||
+      buildResult.build.arn === undefined
+    ) {
+      return Promise.reject('Error starting build')
+    }
+    return Promise.resolve(buildResult.build.arn)
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
+
+export type BuildInfo = {
+  prNumber: string
+  buildToken: string
+}
+
+export async function getBuildInfo(
+  region: string,
+  id: string
+): Promise<BuildInfo | undefined> {
+  const client = new CodeBuildClient({ region: region })
+  const getBuildCmd = new BatchGetBuildsCommand({
+    ids: [id],
+  })
+  const builds = await client.send(getBuildCmd)
+  if (
+    builds !== undefined &&
+    builds.builds !== undefined &&
+    builds.builds.length === 1 &&
+    builds.builds[0].environment !== undefined &&
+    builds.builds[0].environment.environmentVariables !== undefined
+  ) {
+    const token = builds.builds[0].environment.environmentVariables.find(
+      env => env.name === 'BUILD_TOKEN'
+    )
+    const prNumber = builds.builds[0].environment.environmentVariables.find(
+      env => env.name === 'MILMOVE_PR'
+    )
+    if (
+      token === undefined ||
+      token.value === undefined ||
+      prNumber == undefined ||
+      prNumber.value === undefined
+    ) {
+      return undefined
+    }
+    return {
+      prNumber: prNumber.value,
+      buildToken: token.value,
+    }
+  }
 }

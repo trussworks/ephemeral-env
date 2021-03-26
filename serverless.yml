@@ -1,0 +1,82 @@
+# For full config options, check the docs:
+#    docs.serverless.com
+
+# this needs to match the name of the service in terraform
+service: reviewapp
+
+frameworkVersion: "=2.31.0"
+provider:
+  name: aws
+  lambdaHashingVersion: 20201221
+  runtime: nodejs12.x
+  stage: ${opt:stage, 'offline'}
+  region: ${env:AWS_REGION}
+  apiGateway:
+    shouldStartNameWithService: true
+  deploymentBucket:
+    maxPreviousDeploymentArtifacts: 5
+    blockPublicAccess: true
+    serverSideEncryption: AES256
+
+package:
+  excludeDevDependencies: true
+
+plugins:
+  - serverless-webpack
+  - serverless-offline
+
+custom:
+  config:
+    signingSecret: ${env:SLACK_SIGNING_SECRET, ssm:/app/reviewappbot/sandbox/slack-signing-secret~true}
+    apiToken: ${env:SLACK_API_TOKEN, ssm:/app/reviewappbot/sandbox/slack-api-token~true}
+    dockerUsername: ${env:DOCKER_USERNAME, ssm:/app/reviewappbot/sandbox/docker-username}
+    dockerPassword: ${env:DOCKER_PASSWORD, ssm:/app/reviewappbot/sandbox/docker-password~true}
+    slackbotLambdaRole: ${env:SLACKBOT_LAMBDA_ROLE, ssm:/app/reviewappbot/sandbox/lambda-role}
+  webpack:
+    webpackConfig: 'webpack.config.js'
+    packager: 'yarn'
+    excludeFiles: src/**/*.spec.ts
+    includeModules:
+      forceExclude:
+        - aws-sdk
+
+functions:
+  slack:
+    handler: src/slack_handler.slackHandler
+    environment:
+      SLACK_SIGNING_SECRET: ${self:custom.config.signingSecret}
+      SLACK_API_TOKEN: ${self:custom.config.apiToken}
+      DOCKER_USERNAME: ${self:custom.config.dockerUsername}
+      DOCKER_PASSWORD: ${self:custom.config.dockerPassword}
+      LOG_LEVEL: debug
+    role: ${self:custom.config.slackbotLambdaRole}
+    events:
+      - http:
+          path: slack
+          method: post
+
+  cloudwatch:
+    handler: src/cloudwatch_handler.cloudwatchHandler
+    environment:
+      SLACK_SIGNING_SECRET: ${self:custom.config.signingSecret}
+      SLACK_API_TOKEN: ${self:custom.config.apiToken}
+    role: ${self:custom.config.slackbotLambdaRole}
+    # We could set up the events in terraform instead of here.
+    # We would need to put the ARN of the lambda as an input for
+    # terraform and that might complicate bootstrapping
+    events:
+      - cloudwatchEvent:
+          name: "codebuild_event"
+          event:
+            source:
+              - "aws.codebuild"
+            detail-type:
+              - "CodeBuild Build State Change"
+            detail:
+              build-status:
+                - "SUCCEEDED"
+                - "FAILED"
+                - "STOPPED"
+              project-name:
+                - "milmove-ephemeral"
+              
