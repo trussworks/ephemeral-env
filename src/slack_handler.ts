@@ -132,8 +132,6 @@ export async function respondToEvent(
     'deploy\\s+<https://github.com/transcom/mymove/pull/(\\d+)>'
   )
   const found = mentionEvent.text.match(milmoveRegex)
-  logger.debug('DREW DEBUG event text', { text: mentionEvent.text })
-  logger.debug('DREW DEBUG found', { found: found })
   if (found == undefined || found.length != 2) {
     await sendResponse(slackConfig.apiToken, {
       channel: mentionEvent.channel,

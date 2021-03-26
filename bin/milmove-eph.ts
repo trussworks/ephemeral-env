@@ -1,8 +1,8 @@
-import * as child from 'child_process'
 import {
   EphemeralEnvConfig,
   //  createEphemeralNewAlb,
   createEphemeralExistingAlb,
+  runEcsCli,
 } from '../src/ephemeral'
 
 async function doAlbStuff(cfg: EphemeralEnvConfig) {
@@ -38,6 +38,7 @@ async function main() {
   }
   const cfg: EphemeralEnvConfig = {
     envName: envName,
+    clusterName: 'milmove-ephemeral',
     region: region,
     baseDomain: baseDomain,
     subnetIds: [
@@ -67,47 +68,31 @@ async function main() {
 
     process.chdir(ecsCliDeployDir)
 
-    const createClusterCmd = child.spawnSync('ecs-cli', [
-      'up',
-      '--force',
-      '--launch-type',
-      'FARGATE',
-      '--region',
-      cfg.region,
-      '-c',
-      cfg.envName,
-      '--vpc',
-      cfg.vpcId,
-      '-subnets',
-      cfg.subnetIds.join(','),
-    ])
-    if (createClusterCmd.error || createClusterCmd.status !== 0) {
-      console.log('Failed to run create cluster command')
-      console.log('stderr: ', createClusterCmd.stderr.toString())
-      console.log('stdout: ', createClusterCmd.stdout.toString())
-      process.exit(1)
-    }
+    // const createClusterCmd = child.spawnSync('ecs-cli', [
+    //   'up',
+    //   '--force',
+    //   '--launch-type',
+    //   'FARGATE',
+    //   '--region',
+    //   cfg.region,
+    //   '-c',
+    //   cfg.envName,
+    //   '--vpc',
+    //   cfg.vpcId,
+    //   '--subnets',
+    //   cfg.subnetIds.join(','),
+    //   '--tags',
+    //   `ephemeral=true,ephemeralEnvName=${cfg.envName}`,
+    // ])
+    // if (createClusterCmd.error || createClusterCmd.status !== 0) {
+    //   console.log('Failed to run create cluster command')
+    //   console.log('stderr: ', createClusterCmd.stderr.toString())
+    //   console.log('stdout: ', createClusterCmd.stdout.toString())
+    //   process.exit(1)
+    // }
 
-    const serviceUpCmd = child.spawnSync('ecs-cli', [
-      'compose',
-      '--file',
-      'docker-compose.ecs.yml',
-      '--project-name',
-      cfg.targetContainer,
-      'service',
-      'up',
-      '--create-log-groups',
-      '--cluster',
-      cfg.envName,
-      '--launch-type',
-      'FARGATE',
-      '--target-groups',
-      `targetGroupArn=${tgConfig.arn},containerName=${cfg.targetContainer},containerPort=${cfg.targetPort}`,
-    ])
-    if (serviceUpCmd.error || serviceUpCmd.status !== 0) {
-      console.log('Failed to run service up command')
-      console.log('stderr: ', serviceUpCmd.stderr.toString())
-      console.log('stdout: ', serviceUpCmd.stdout.toString())
+    if (!runEcsCli(cfg, tgConfig)) {
+      console.log('ecs-cli error')
       process.exit(1)
     }
   } catch (error) {

@@ -10,6 +10,7 @@
   "devDependencies": {
     "@types/aws-lambda": "^8.10.73",
     "@types/jest": "^24.0.18",
+    "@types/js-yaml": "^4.0.0",
     "@types/node": "^12.7.5",
     "@typescript-eslint/eslint-plugin": "^4.14.0",
     "@typescript-eslint/parser": "^4.14.1",
@@ -44,6 +45,7 @@
     "@aws-sdk/client-route-53": "^3.8.1",
     "@slack/events-api": "^3.0.0",
     "@slack/web-api": "^6.1.0",
+    "js-yaml": "^4.0.0",
     "serverless": "^2.31.0",
     "source-map": "^0.7.3",
     "source-map-support": "^0.5.16",

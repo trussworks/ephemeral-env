@@ -60,6 +60,7 @@ functions:
     environment:
       SLACK_SIGNING_SECRET: ${self:custom.config.signingSecret}
       SLACK_API_TOKEN: ${self:custom.config.apiToken}
+      LOG_LEVEL: debug
     role: ${self:custom.config.slackbotLambdaRole}
     # We could set up the events in terraform instead of here.
     # We would need to put the ARN of the lambda as an input for

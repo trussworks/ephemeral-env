@@ -1,3 +1,7 @@
+import * as child from 'child_process'
+import * as yaml from 'js-yaml'
+import * as fs from 'fs'
+
 import {
   ElasticLoadBalancingV2Client,
   CreateListenerCommand,
@@ -26,11 +30,13 @@ import {
   CodeBuildClient,
   StartBuildCommand,
   BatchGetBuildsCommand,
+  EnvironmentVariable,
 } from '@aws-sdk/client-codebuild'
 
 export type EphemeralEnvConfig = {
   region: string
   envName: string
+  clusterName: string
   subnetIds: string[]
   defaultSecurityGroupId: string
   vpcId: string
@@ -336,8 +342,9 @@ export async function createAlbListener(
     Port: cfg.targetPort,
     HealthCheckPort: `${cfg.targetPort}`,
     HealthCheckPath: cfg.healthCheckPath,
-    HealthCheckIntervalSeconds: 90,
-    HealthCheckTimeoutSeconds: 60,
+    HealthCheckIntervalSeconds: 60,
+    HealthCheckTimeoutSeconds: 45,
+    HealthyThresholdCount: 2,
     TargetType: 'ip',
     VpcId: cfg.vpcId,
   })
@@ -422,7 +429,6 @@ export async function createAlbRule(
   }
 
   const dtgCmd = new DescribeTargetGroupsCommand({
-    LoadBalancerArn: albCfg.arn,
     Names: [`${cfg.envName}-tg`],
   })
 
@@ -451,10 +457,15 @@ export async function createAlbRule(
       Port: cfg.targetPort,
       HealthCheckPort: `${cfg.targetPort}`,
       HealthCheckPath: cfg.healthCheckPath,
-      HealthCheckIntervalSeconds: 90,
-      HealthCheckTimeoutSeconds: 60,
+      HealthCheckIntervalSeconds: 60,
+      HealthCheckTimeoutSeconds: 45,
+      HealthyThresholdCount: 2,
       TargetType: 'ip',
       VpcId: cfg.vpcId,
+      Tags: [
+        { Key: 'ephemeral', Value: 'true' },
+        { Key: 'ephemeralEnvName', Value: cfg.envName },
+      ],
     })
 
     try {
@@ -527,6 +538,10 @@ export async function createAlbRule(
     ],
     Priority: priorityCount,
     ListenerArn: albCfg.albListenerArn,
+    Tags: [
+      { Key: 'ephemeral', Value: 'true' },
+      { Key: 'ephemeralEnvName', Value: cfg.envName },
+    ],
   })
   try {
     const lData = await elbClient.send(ruleCmd)
@@ -654,6 +669,25 @@ export type BuildInfo = {
   buildToken: string
 }
 
+export function getBuildInfoFromEnvironmentVariables(
+  environmentVariables: EnvironmentVariable[]
+): BuildInfo | undefined {
+  const token = environmentVariables.find(env => env.name === 'BUILD_TOKEN')
+  const prNumber = environmentVariables.find(env => env.name === 'MILMOVE_PR')
+  if (
+    token === undefined ||
+    token.value === undefined ||
+    prNumber == undefined ||
+    prNumber.value === undefined
+  ) {
+    return undefined
+  }
+  return {
+    prNumber: prNumber.value,
+    buildToken: token.value,
+  }
+}
+
 export async function getBuildInfo(
   region: string,
   id: string
@@ -670,23 +704,84 @@ export async function getBuildInfo(
     builds.builds[0].environment !== undefined &&
     builds.builds[0].environment.environmentVariables !== undefined
   ) {
-    const token = builds.builds[0].environment.environmentVariables.find(
-      env => env.name === 'BUILD_TOKEN'
+    return getBuildInfoFromEnvironmentVariables(
+      builds.builds[0].environment.environmentVariables
     )
-    const prNumber = builds.builds[0].environment.environmentVariables.find(
-      env => env.name === 'MILMOVE_PR'
-    )
-    if (
-      token === undefined ||
-      token.value === undefined ||
-      prNumber == undefined ||
-      prNumber.value === undefined
-    ) {
-      return undefined
-    }
-    return {
-      prNumber: prNumber.value,
-      buildToken: token.value,
-    }
   }
+}
+
+type TaskDefinition = {
+  task_execution_role: string
+}
+
+type EcsParams = {
+  task_definition: TaskDefinition
+  run_params?: object
+}
+
+function isValidEcsParams(ecsParams: any): ecsParams is EcsParams {
+  return (
+    ecsParams !== undefined &&
+    typeof ecsParams === 'object' &&
+    'task_definition' in ecsParams &&
+    typeof ecsParams['task_definition'] === 'object'
+  )
+}
+
+export function runEcsCli(
+  cfg: EphemeralEnvConfig,
+  tgConfig: TargetGroupConfig
+): boolean {
+  try {
+    const ecsParams = yaml.load(fs.readFileSync('ecs-params.yml.in', 'utf8'))
+    if (!isValidEcsParams(ecsParams)) {
+      console.log('ecs-params.yml.in invalid format')
+      return false
+    }
+
+    ecsParams.task_definition['task_execution_role'] =
+      'milmove-ecs-cli-task-role'
+    ecsParams['run_params'] = {
+      network_configuration: {
+        awsvpc_configuration: {
+          subnets: cfg.subnetIds,
+          security_groups: [cfg.defaultSecurityGroupId],
+          assign_public_ip: 'ENABLED',
+        },
+      },
+    }
+    fs.writeFileSync('ecs-params.yml', yaml.dump(ecsParams))
+  } catch (error) {
+    console.log('Cannot read ecs-params.yml.in')
+    return false
+  }
+
+  const serviceUpCmd = child.spawnSync('ecs-cli', [
+    'compose',
+    '--file',
+    'docker-compose.ecs.yml',
+    '--project-name',
+    cfg.envName,
+    'service',
+    'up',
+    '--create-log-groups',
+    '--force-deployment',
+    '--cluster',
+    cfg.clusterName,
+    '--launch-type',
+    'FARGATE',
+    '--timeout',
+    '7',
+    '--target-groups',
+    `targetGroupArn=${tgConfig.arn},containerName=${cfg.targetContainer},containerPort=${cfg.targetPort}`,
+    '--tags',
+    `ephemeral=true,ephemeralEnvName=${cfg.envName}`,
+  ])
+  if (serviceUpCmd.error || serviceUpCmd.status !== 0) {
+    console.log('Failed to run service up command')
+    console.log('stderr: ', serviceUpCmd.stderr.toString())
+    console.log('stdout: ', serviceUpCmd.stdout.toString())
+    return false
+  }
+  return true
 }
