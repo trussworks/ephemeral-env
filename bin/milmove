@@ -179,6 +179,7 @@ export MILMOVE_MIGRATE_IMG=${MILMOVE_MIGRATE_ECR}:${ENV_NAME}
 MILMOVE_ECR=${ECR_BASE}/app
 export MILMOVE_IMG=${MILMOVE_ECR}:${ENV_NAME}
 
+echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin
 aws ecr get-login-password --region "${AWS_REGION}" |
     docker login --username AWS --password-stdin "${MILMOVE_ECR}"
 
