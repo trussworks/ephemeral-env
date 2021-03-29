@@ -4,22 +4,26 @@ import * as fs from 'fs'
 
 import {
   ElasticLoadBalancingV2Client,
-  CreateListenerCommand,
-  CreateLoadBalancerCommand,
   CreateTargetGroupCommand,
   CreateRuleCommand,
+  DeleteRuleCommand,
+  DeleteTargetGroupCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
   DescribeRulesCommand,
+  DescribeTagsCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2'
 
 import {
-  EC2Client,
-  CreateSecurityGroupCommand,
-  AuthorizeSecurityGroupIngressCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeSecurityGroupsCommandOutput,
-} from '@aws-sdk/client-ec2'
+  ECSClient,
+  DeleteServiceCommand,
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  ListClustersCommand,
+  ListServicesCommand,
+  UpdateServiceCommand,
+  ServiceField,
+} from '@aws-sdk/client-ecs'
 
 import {
   Route53Client,
@@ -46,7 +50,7 @@ export type EphemeralEnvConfig = {
   healthCheckPath: string
   hostedZoneId: string
   baseDomain: string
-  albListenerConfig?: AlbListenerConfig
+  albListenerConfig: AlbListenerConfig
 }
 
 export type BuildConfig = {
@@ -78,318 +82,6 @@ export type AlbAndTgConfig = {
 
 export type TargetGroupConfig = {
   arn: string
-}
-
-export async function createSecurityGroup(
-  cfg: EphemeralEnvConfig
-): Promise<AlbSgConfig> {
-  const client = new EC2Client({ region: cfg.region })
-  const createSG = new CreateSecurityGroupCommand({
-    GroupName: `${cfg.envName}-lb-sg`,
-    Description: `${cfg.envName}-lb-sg`,
-    VpcId: cfg.vpcId,
-  })
-  try {
-    const existingDsg = new DescribeSecurityGroupsCommand({
-      Filters: [
-        {
-          Name: 'vpc-id',
-          Values: [cfg.vpcId],
-        },
-        {
-          Name: 'group-name',
-          Values: [`${cfg.envName}-lb-sg`],
-        },
-      ],
-    })
-    let sgDataWithOwner: DescribeSecurityGroupsCommandOutput | undefined
-    try {
-      sgDataWithOwner = await client.send(existingDsg)
-    } catch (error) {
-      console.info('Error finding existing security group, continuing', error)
-      sgDataWithOwner = undefined
-    }
-    if (
-      sgDataWithOwner === undefined ||
-      sgDataWithOwner.SecurityGroups === undefined ||
-      sgDataWithOwner.SecurityGroups.length !== 1 ||
-      sgDataWithOwner.SecurityGroups[0].GroupId == undefined ||
-      sgDataWithOwner.SecurityGroups[0].OwnerId == undefined
-    ) {
-      const sgData = await client.send(createSG)
-      console.log('sgData', sgData)
-      if (sgData.GroupId === undefined) {
-        return Promise.reject('Cannot create security group')
-      }
-      const dsg = new DescribeSecurityGroupsCommand({
-        GroupIds: [sgData.GroupId],
-      })
-      sgDataWithOwner = await client.send(dsg)
-      if (
-        sgDataWithOwner.SecurityGroups === undefined ||
-        sgDataWithOwner.SecurityGroups.length !== 1 ||
-        sgDataWithOwner.SecurityGroups[0].GroupId == undefined ||
-        sgDataWithOwner.SecurityGroups[0].OwnerId == undefined
-      ) {
-        return Promise.reject('Cannot find created security group')
-      }
-    }
-    return Promise.resolve({
-      groupId: sgDataWithOwner.SecurityGroups[0].GroupId,
-      ownerId: sgDataWithOwner.SecurityGroups[0].OwnerId,
-    })
-  } catch (error) {
-    return Promise.reject(error)
-  }
-}
-
-export async function createALBAndUpdateSG(
-  cfg: EphemeralEnvConfig,
-  albSgCfg: AlbSgConfig
-): Promise<AlbConfig> {
-  try {
-    const elbClient = new ElasticLoadBalancingV2Client({ region: cfg.region })
-
-    const describeCmd = new DescribeLoadBalancersCommand({
-      Names: [`${cfg.envName}-alb`],
-    })
-
-    let albConfig: AlbConfig | undefined
-
-    try {
-      const albData = await elbClient.send(describeCmd)
-      if (
-        albData.LoadBalancers !== undefined &&
-        albData.LoadBalancers.length === 1 &&
-        albData.LoadBalancers[0].LoadBalancerArn !== undefined &&
-        albData.LoadBalancers[0].DNSName !== undefined &&
-        albData.LoadBalancers[0].CanonicalHostedZoneId !== undefined
-      ) {
-        albConfig = {
-          arn: albData.LoadBalancers[0].LoadBalancerArn,
-          dnsName: albData.LoadBalancers[0].DNSName,
-          canonicalHostedZoneId: albData.LoadBalancers[0].CanonicalHostedZoneId,
-        }
-      }
-    } catch (error) {
-      console.info('no alb exists, creating')
-      albConfig = undefined
-    }
-
-    if (albConfig === undefined) {
-      const createALB = new CreateLoadBalancerCommand({
-        Name: `${cfg.envName}-alb`,
-        Subnets: cfg.subnetIds,
-        SecurityGroups: [albSgCfg.groupId],
-      })
-      const albData = await elbClient.send(createALB)
-      console.log('albData', albData)
-      if (
-        albData.LoadBalancers === undefined ||
-        albData.LoadBalancers.length != 1 ||
-        albData.LoadBalancers[0].LoadBalancerArn === undefined ||
-        albData.LoadBalancers[0].DNSName === undefined ||
-        albData.LoadBalancers[0].CanonicalHostedZoneId === undefined
-      ) {
-        return Promise.reject('Cannot create ALB')
-      }
-      albConfig = {
-        arn: albData.LoadBalancers[0].LoadBalancerArn,
-        dnsName: albData.LoadBalancers[0].DNSName,
-        canonicalHostedZoneId: albData.LoadBalancers[0].CanonicalHostedZoneId,
-      }
-    }
-
-    const ec2Client = new EC2Client({ region: cfg.region })
-
-    const existingLbIngress = new DescribeSecurityGroupsCommand({
-      Filters: [
-        {
-          Name: 'group-id',
-          Values: [albSgCfg.groupId],
-        },
-      ],
-    })
-    let hasLbIngressRule = false
-    try {
-      const sgDataWithOwner = await ec2Client.send(existingLbIngress)
-      console.log('sgdo', sgDataWithOwner)
-      if (
-        sgDataWithOwner.SecurityGroups !== undefined &&
-        sgDataWithOwner.SecurityGroups.length === 1 &&
-        sgDataWithOwner.SecurityGroups[0].IpPermissions !== undefined &&
-        sgDataWithOwner.SecurityGroups[0].IpPermissions.length == 1
-      ) {
-        hasLbIngressRule = true
-      }
-    } catch (error) {
-      console.log('error getting lb ingress rule', error)
-      hasLbIngressRule = false
-    }
-
-    if (hasLbIngressRule) {
-      console.log('has existing lb ingress rule')
-    } else {
-      const inputCmd = new AuthorizeSecurityGroupIngressCommand({
-        GroupId: albSgCfg.groupId,
-        IpPermissions: [
-          {
-            IpProtocol: '-1',
-            IpRanges: [{ CidrIp: '0.0.0.0/0' }],
-          },
-        ],
-      })
-      const lbIngressData = await ec2Client.send(inputCmd)
-      console.log('lbIngressData', lbIngressData)
-    }
-
-    const existingDefaultIngress = new DescribeSecurityGroupsCommand({
-      Filters: [
-        {
-          Name: 'vpc-id',
-          Values: [cfg.vpcId],
-        },
-        {
-          Name: 'group-id',
-          Values: [cfg.defaultSecurityGroupId],
-        },
-      ],
-    })
-    let hasDefaultIngressRule = false
-    try {
-      const sgDataWithOwner = await ec2Client.send(existingDefaultIngress)
-      console.log('sgdo', sgDataWithOwner)
-      if (
-        sgDataWithOwner.SecurityGroups !== undefined &&
-        sgDataWithOwner.SecurityGroups.length === 1 &&
-        sgDataWithOwner.SecurityGroups[0].IpPermissions !== undefined &&
-        sgDataWithOwner.SecurityGroups[0].IpPermissions.length > 0 &&
-        sgDataWithOwner.SecurityGroups[0].IpPermissions.find(
-          perm =>
-            perm.UserIdGroupPairs !== undefined &&
-            perm.UserIdGroupPairs.find(
-              pair => pair.GroupId === albSgCfg.groupId
-            )
-        ) !== undefined
-      ) {
-        console.log(
-          'has existing default ingress rule perms',
-          JSON.stringify(sgDataWithOwner.SecurityGroups[0].IpPermissions)
-        )
-        hasDefaultIngressRule = true
-      }
-    } catch (error) {
-      console.log('error getting ingress rule', error)
-      hasDefaultIngressRule = false
-    }
-
-    if (hasDefaultIngressRule) {
-      console.log('has existing default ingress rule')
-      return Promise.resolve(albConfig)
-    }
-
-    // allow traffic from lb
-    const lbInputCmd = new AuthorizeSecurityGroupIngressCommand({
-      GroupId: cfg.defaultSecurityGroupId,
-      IpPermissions: [
-        {
-          IpProtocol: '-1',
-          UserIdGroupPairs: [
-            {
-              GroupId: albSgCfg.groupId,
-              UserId: albSgCfg.ownerId,
-            },
-          ],
-        },
-      ],
-    })
-    const lbData = await ec2Client.send(lbInputCmd)
-    console.log('lbData', lbData)
-    return Promise.resolve(albConfig)
-  } catch (error) {
-    return Promise.reject(error)
-  }
-}
-
-export async function createAlbListener(
-  cfg: EphemeralEnvConfig,
-  albCfg: AlbConfig
-): Promise<TargetGroupConfig> {
-  const elbClient = new ElasticLoadBalancingV2Client({ region: cfg.region })
-
-  const dtgCmd = new DescribeTargetGroupsCommand({
-    LoadBalancerArn: albCfg.arn,
-  })
-
-  try {
-    const existingTg = await elbClient.send(dtgCmd)
-    if (
-      existingTg.TargetGroups !== undefined &&
-      existingTg.TargetGroups.length === 1 &&
-      existingTg.TargetGroups[0].TargetGroupArn !== undefined
-    ) {
-      const tgConfig = {
-        arn: existingTg.TargetGroups[0].TargetGroupArn,
-      }
-      console.log('Returning existing TG', tgConfig)
-      return Promise.resolve(tgConfig)
-    }
-  } catch (error) {}
-
-  const tgCmd = new CreateTargetGroupCommand({
-    Name: `${cfg.envName}-tg`,
-    Protocol: 'HTTP',
-    Port: cfg.targetPort,
-    HealthCheckPort: `${cfg.targetPort}`,
-    HealthCheckPath: cfg.healthCheckPath,
-    HealthCheckIntervalSeconds: 60,
-    HealthCheckTimeoutSeconds: 45,
-    HealthyThresholdCount: 2,
-    TargetType: 'ip',
-    VpcId: cfg.vpcId,
-  })
-
-  let tgConfig: TargetGroupConfig | undefined
-
-  try {
-    const tgData = await elbClient.send(tgCmd)
-    console.log('tgData', tgData)
-    if (
-      tgData.TargetGroups !== undefined &&
-      tgData.TargetGroups.length == 1 &&
-      tgData.TargetGroups[0].TargetGroupArn !== undefined
-    ) {
-      tgConfig = {
-        arn: tgData.TargetGroups[0].TargetGroupArn,
-      }
-    }
-  } catch (error) {
-    return Promise.reject(error)
-  }
-
-  if (tgConfig === undefined) {
-    return Promise.reject('Cannot create target group')
-  }
-
-  const listenerCmd = new CreateListenerCommand({
-    DefaultActions: [
-      {
-        Type: 'forward',
-        TargetGroupArn: tgConfig.arn,
-      },
-    ],
-    Port: 443,
-    Protocol: 'HTTPS',
-    LoadBalancerArn: albCfg.arn,
-    Certificates: [{ CertificateArn: cfg.certificateArn }],
-  })
-  try {
-    const lData = await elbClient.send(listenerCmd)
-    console.log('lData', lData)
-  } catch (error) {
-    return Promise.reject(error)
-  }
-  return Promise.resolve(tgConfig)
 }
 
 export async function createAlbRule(
@@ -588,23 +280,6 @@ export async function setupDns(cfg: EphemeralEnvConfig, albCfg: AlbConfig) {
   }
 }
 
-export async function createEphemeralNewAlb(
-  cfg: EphemeralEnvConfig
-): Promise<TargetGroupConfig> {
-  try {
-    const sgCfg = await createSecurityGroup(cfg)
-    const albConfig = await createALBAndUpdateSG(cfg, sgCfg)
-    console.log('albConfig', albConfig)
-    const tgConfig = await createAlbListener(cfg, albConfig)
-    console.log('tgConfig', tgConfig)
-    const rrStatus = await setupDns(cfg, albConfig)
-    console.log('rrStatus', rrStatus)
-    return Promise.resolve(tgConfig)
-  } catch (error) {
-    return Promise.reject(error)
-  }
-}
-
 export async function createEphemeralExistingAlb(
   cfg: EphemeralEnvConfig,
   albListenerCfg: AlbListenerConfig
@@ -784,4 +459,140 @@ export function runEcsCli(
     return false
   }
   return true
+}
+
+export async function destroyEphemeralTargetGroups(cfg: EphemeralEnvConfig) {
+  const elbClient = new ElasticLoadBalancingV2Client({ region: cfg.region })
+  const dtgCmd = new DescribeTargetGroupsCommand({
+    LoadBalancerArn: cfg.albListenerConfig?.arn,
+  })
+
+  const existingTgs = await elbClient.send(dtgCmd)
+  const tgArns = existingTgs?.TargetGroups?.map(tg => tg.TargetGroupArn).filter(
+    arn => arn != undefined
+  ) as string[]
+  const dtCmd = new DescribeTagsCommand({
+    ResourceArns: tgArns,
+  })
+  const tgTags = await elbClient.send(dtCmd)
+  const ephemeralTgs = tgTags.TagDescriptions?.filter(
+    tg =>
+      tg.Tags !== undefined &&
+      tg.Tags.find(tag => tag.Key === 'ephemeral' && tag.Value === 'true')
+  )
+  if (ephemeralTgs !== undefined) {
+    for (const tg of ephemeralTgs) {
+      console.log('deleting tg', tg)
+      const dtg = new DeleteTargetGroupCommand({
+        TargetGroupArn: tg.ResourceArn,
+      })
+      const r = await elbClient.send(dtg)
+      console.log('delete tg response', r)
+    }
+  }
+}
+
+export async function destroyEphemeralRules(cfg: EphemeralEnvConfig) {
+  const elbClient = new ElasticLoadBalancingV2Client({ region: cfg.region })
+  const drCmd = new DescribeRulesCommand({
+    ListenerArn: cfg.albListenerConfig?.albListenerArn,
+  })
+
+  const existingRules = await elbClient.send(drCmd)
+  const ruleArns = existingRules.Rules?.map(rule => rule.RuleArn).filter(
+    arn => arn != undefined
+  ) as string[]
+  const dtCmd = new DescribeTagsCommand({
+    ResourceArns: ruleArns,
+  })
+  const ruleTags = await elbClient.send(dtCmd)
+  const ephemeralRules = ruleTags.TagDescriptions?.filter(
+    tg =>
+      tg.Tags !== undefined &&
+      tg.Tags.find(tag => tag.Key === 'ephemeral' && tag.Value === 'true')
+  )
+  if (ephemeralRules !== undefined) {
+    for (const rule of ephemeralRules) {
+      console.log('deleting rule', rule)
+      const drc = new DeleteRuleCommand({
+        RuleArn: rule.ResourceArn,
+      })
+      const r = await elbClient.send(drc)
+      console.log('delete rule response', r)
+    }
+  }
+}
+
+export async function destroyEphemeralServices(cfg: EphemeralEnvConfig) {
+  const ecsClient = new ECSClient({ region: cfg.region })
+
+  const lcCmd = new ListClustersCommand({
+    maxResults: 100,
+  })
+
+  const clusterArns = await ecsClient.send(lcCmd)
+
+  const dcCmd = new DescribeClustersCommand({
+    clusters: clusterArns.clusterArns,
+  })
+
+  const clusters = await ecsClient.send(dcCmd)
+
+  const ephemeralCluster = clusters.clusters?.find(
+    cluster => cluster.clusterName === cfg.clusterName
+  )
+
+  if (ephemeralCluster === undefined) {
+    console.log(`Cannot find ephemeral cluster '${cfg.clusterName}'`)
+    return
+  }
+
+  const clusterArn = ephemeralCluster.clusterArn
+
+  const dsCmd = new ListServicesCommand({
+    cluster: clusterArn,
+    maxResults: 100,
+  })
+
+  const existingServices = await ecsClient.send(dsCmd)
+  const serviceArns = existingServices.serviceArns?.filter(
+    arn => arn != undefined
+  ) as string[]
+  if (serviceArns.length === 0) {
+    // no services to tear down
+    return
+  }
+  const dtCmd = new DescribeServicesCommand({
+    cluster: clusterArn,
+    services: serviceArns,
+    include: [ServiceField.TAGS],
+  })
+  const servicesWithTags = await ecsClient.send(dtCmd)
+  const ephemeralServices = servicesWithTags.services?.filter(
+    service =>
+      service != undefined &&
+      service.tags !== undefined &&
+      service.tags.find(tag => tag.key === 'ephemeral' && tag.value === 'true')
+  )
+  if (ephemeralServices !== undefined) {
+    for (const svc of ephemeralServices) {
+      const updateService = new UpdateServiceCommand({
+        cluster: clusterArn,
+        service: svc.serviceArn,
+        desiredCount: 0,
+      })
+      await ecsClient.send(updateService)
+      const delService = new DeleteServiceCommand({
+        cluster: clusterArn,
+        service: svc.serviceArn,
+      })
+      await ecsClient.send(delService)
+    }
+  }
+}
+
+export async function destroyEphemeral(cfg: EphemeralEnvConfig) {
+  await destroyEphemeralServices(cfg)
+  await destroyEphemeralRules(cfg)
+  await destroyEphemeralTargetGroups(cfg)
 }

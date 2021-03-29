@@ -32,20 +32,23 @@ export async function handleEvent(
 
   const tokenInfo = parseBuildToken(buildInfo.buildToken)
   const buildStatus = event.detail['build-status']
+  logger.debug('token info and build status', tokenInfo, buildStatus)
   if (buildStatus === 'SUCCEEDED') {
-    await sendResponse(slackConfig.apiToken, {
+    const r = await sendResponse(slackConfig.apiToken, {
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Environment is deployed',
       markdown: `[Environment is deployed](https://my-milmove-pr-${buildInfo.prNumber}.mymove.sandbox.truss.coffee)`,
     })
+    logger.debug('Success response sent', r)
   } else {
-    await sendResponse(slackConfig.apiToken, {
+    const r = await sendResponse(slackConfig.apiToken, {
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Deployment problem',
       markdown: `Deployment problem: ${buildStatus}`,
     })
+    logger.debug('Problem response sent', r)
   }
 }
 
@@ -69,6 +72,6 @@ export const cloudwatchHandler: CodeBuildCloudWatchStateHandler = async (
   logger.debug('Using slack config', slackConfig)
   logger.debug('handling event', event)
 
-  handleEvent(slackConfig, logger, event)
+  await handleEvent(slackConfig, logger, event)
   // cloudwatch events have no response
 }

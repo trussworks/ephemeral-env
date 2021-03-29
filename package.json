@@ -40,6 +40,7 @@
     "@aws-sdk/client-cloudwatch-events": "^3.9.0",
     "@aws-sdk/client-codebuild": "^3.9.0",
     "@aws-sdk/client-ec2": "^3.8.1",
+    "@aws-sdk/client-ecs": "^3.10.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.8.1",
     "@aws-sdk/client-lambda": "^3.9.0",
     "@aws-sdk/client-route-53": "^3.8.1",

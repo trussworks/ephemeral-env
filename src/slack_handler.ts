@@ -231,7 +231,10 @@ export const slackHandler: APIGatewayProxyHandler = async (
     return {
       isBase64Encoded: false,
       statusCode: 500,
-      body: '',
+      headers: {
+        'Content-type': 'application/json',
+      },
+      body: JSON.stringify({ error: 'error' }),
     }
   }
 }
