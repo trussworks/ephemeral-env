@@ -185,11 +185,16 @@ echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --passw
 aws ecr get-login-password --region "${AWS_REGION}" |
     docker login --username AWS --password-stdin "${MILMOVE_ECR}"
 
+docker pull "${MILMOVE_IMG}" || true
+docker pull "${MILMOVE_MIGRATE_IMG}" || true
+
 docker build -t "${MILMOVE_IMG}" \
+       --cache-from "${MILMOVE_IMG}" \
        --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
        --build-arg "GIT_COMMIT=${GIT_COMMIT}" \
        -f Dockerfile.reviewapp .
 docker build -t "${MILMOVE_MIGRATE_IMG}" \
+       --cache-from "${MILMOVE_MIGRATE_IMG}" \
        --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
        --build-arg "GIT_COMMIT=${GIT_COMMIT}" \
        --target migrate \
