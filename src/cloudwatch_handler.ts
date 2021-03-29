@@ -38,7 +38,7 @@ export async function handleEvent(
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Environment is deployed',
-      markdown: `[Environment is deployed](https://my-milmove-pr-${buildInfo.prNumber}.mymove.sandbox.truss.coffee)`,
+      markdown: `<https://my-milmove-pr-${buildInfo.prNumber}.mymove.sandbox.truss.coffee|Environment is deployed>`,
     })
     logger.debug('Success response sent', r)
   } else {

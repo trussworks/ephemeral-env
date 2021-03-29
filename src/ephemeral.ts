@@ -463,9 +463,9 @@ export function runEcsCli(
 
 export async function destroyEphemeralTargetGroups(cfg: EphemeralEnvConfig) {
   const elbClient = new ElasticLoadBalancingV2Client({ region: cfg.region })
-  const dtgCmd = new DescribeTargetGroupsCommand({
-    LoadBalancerArn: cfg.albListenerConfig?.arn,
-  })
+  // get all target groups as deleting the ecs service and rule
+  // disassociates the target group from the ALB
+  const dtgCmd = new DescribeTargetGroupsCommand({})
 
   const existingTgs = await elbClient.send(dtgCmd)
   const tgArns = existingTgs?.TargetGroups?.map(tg => tg.TargetGroupArn).filter(
@@ -482,12 +482,10 @@ export async function destroyEphemeralTargetGroups(cfg: EphemeralEnvConfig) {
   )
   if (ephemeralTgs !== undefined) {
     for (const tg of ephemeralTgs) {
-      console.log('deleting tg', tg)
       const dtg = new DeleteTargetGroupCommand({
         TargetGroupArn: tg.ResourceArn,
       })
-      const r = await elbClient.send(dtg)
-      console.log('delete tg response', r)
+      await elbClient.send(dtg)
     }
   }
 }
