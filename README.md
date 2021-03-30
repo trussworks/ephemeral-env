@@ -30,3 +30,7 @@ Go to `OAuth & Permissions` then scroll down to `Scopes`
 
 1. `app_mentions:read`
 1. `chat:write`
+
+### After Install
+1. Go to `OAuth & Permission` to get the `SLACK_API_TOKEN`
+1. Go to `Basic Information` to get the `SLACK_SIGNING_SECRET`
