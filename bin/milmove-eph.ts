@@ -44,9 +44,9 @@ async function main() {
     hostedZoneId: 'ZF5E6T2ONJR1H',
     albListenerConfig: {
       arn:
-        'arn:aws:elasticloadbalancing:us-west-2:004351505091:loadbalancer/app/drewtest/53c202d75f37cd43',
+        'arn:aws:elasticloadbalancing:us-west-2:004351505091:loadbalancer/app/milmove-ephemeral-envs/80873cf1e844f0e7',
       albListenerArn:
-        'arn:aws:elasticloadbalancing:us-west-2:004351505091:listener/app/drewtest/53c202d75f37cd43/e4e4d82a2246ed44',
+        'arn:aws:elasticloadbalancing:us-west-2:004351505091:listener/app/milmove-ephemeral-envs/80873cf1e844f0e7/137da1f108d3511a',
     },
   }
 
