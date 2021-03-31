@@ -44,7 +44,6 @@ export type EphemeralEnvConfig = {
   subnetIds: string[]
   defaultSecurityGroupId: string
   vpcId: string
-  certificateArn: string
   targetContainer: string
   targetPort: number
   healthCheckPath: string
@@ -192,10 +191,10 @@ export async function createAlbRule(
     if (rules !== undefined && rules.Rules !== undefined) {
       const ruleExists =
         rules.Rules.find(
-          rule =>
+          (rule) =>
             rule.Conditions !== undefined &&
             rule.Conditions.find(
-              cond =>
+              (cond) =>
                 cond.HostHeaderConfig !== undefined &&
                 cond.HostHeaderConfig.Values !== undefined &&
                 cond.HostHeaderConfig.Values.includes(`*-${cfg.baseDomain}`)
@@ -347,8 +346,8 @@ export type BuildInfo = {
 export function getBuildInfoFromEnvironmentVariables(
   environmentVariables: EnvironmentVariable[]
 ): BuildInfo | undefined {
-  const token = environmentVariables.find(env => env.name === 'BUILD_TOKEN')
-  const prNumber = environmentVariables.find(env => env.name === 'MILMOVE_PR')
+  const token = environmentVariables.find((env) => env.name === 'BUILD_TOKEN')
+  const prNumber = environmentVariables.find((env) => env.name === 'MILMOVE_PR')
   if (
     token === undefined ||
     token.value === undefined ||
@@ -468,17 +467,17 @@ export async function destroyEphemeralTargetGroups(cfg: EphemeralEnvConfig) {
   const dtgCmd = new DescribeTargetGroupsCommand({})
 
   const existingTgs = await elbClient.send(dtgCmd)
-  const tgArns = existingTgs?.TargetGroups?.map(tg => tg.TargetGroupArn).filter(
-    arn => arn != undefined
-  ) as string[]
+  const tgArns = existingTgs?.TargetGroups?.map(
+    (tg) => tg.TargetGroupArn
+  ).filter((arn) => arn != undefined) as string[]
   const dtCmd = new DescribeTagsCommand({
     ResourceArns: tgArns,
   })
   const tgTags = await elbClient.send(dtCmd)
   const ephemeralTgs = tgTags.TagDescriptions?.filter(
-    tg =>
+    (tg) =>
       tg.Tags !== undefined &&
-      tg.Tags.find(tag => tag.Key === 'ephemeral' && tag.Value === 'true')
+      tg.Tags.find((tag) => tag.Key === 'ephemeral' && tag.Value === 'true')
   )
   if (ephemeralTgs !== undefined) {
     for (const tg of ephemeralTgs) {
@@ -497,17 +496,17 @@ export async function destroyEphemeralRules(cfg: EphemeralEnvConfig) {
   })
 
   const existingRules = await elbClient.send(drCmd)
-  const ruleArns = existingRules.Rules?.map(rule => rule.RuleArn).filter(
-    arn => arn != undefined
+  const ruleArns = existingRules.Rules?.map((rule) => rule.RuleArn).filter(
+    (arn) => arn != undefined
   ) as string[]
   const dtCmd = new DescribeTagsCommand({
     ResourceArns: ruleArns,
   })
   const ruleTags = await elbClient.send(dtCmd)
   const ephemeralRules = ruleTags.TagDescriptions?.filter(
-    tg =>
+    (tg) =>
       tg.Tags !== undefined &&
-      tg.Tags.find(tag => tag.Key === 'ephemeral' && tag.Value === 'true')
+      tg.Tags.find((tag) => tag.Key === 'ephemeral' && tag.Value === 'true')
   )
   if (ephemeralRules !== undefined) {
     for (const rule of ephemeralRules) {
@@ -537,7 +536,7 @@ export async function destroyEphemeralServices(cfg: EphemeralEnvConfig) {
   const clusters = await ecsClient.send(dcCmd)
 
   const ephemeralCluster = clusters.clusters?.find(
-    cluster => cluster.clusterName === cfg.clusterName
+    (cluster) => cluster.clusterName === cfg.clusterName
   )
 
   if (ephemeralCluster === undefined) {
@@ -554,7 +553,7 @@ export async function destroyEphemeralServices(cfg: EphemeralEnvConfig) {
 
   const existingServices = await ecsClient.send(dsCmd)
   const serviceArns = existingServices.serviceArns?.filter(
-    arn => arn != undefined
+    (arn) => arn != undefined
   ) as string[]
   if (serviceArns.length === 0) {
     // no services to tear down
@@ -567,10 +566,12 @@ export async function destroyEphemeralServices(cfg: EphemeralEnvConfig) {
   })
   const servicesWithTags = await ecsClient.send(dtCmd)
   const ephemeralServices = servicesWithTags.services?.filter(
-    service =>
+    (service) =>
       service != undefined &&
       service.tags !== undefined &&
-      service.tags.find(tag => tag.key === 'ephemeral' && tag.value === 'true')
+      service.tags.find(
+        (tag) => tag.key === 'ephemeral' && tag.value === 'true'
+      )
   )
   if (ephemeralServices !== undefined) {
     for (const svc of ephemeralServices) {

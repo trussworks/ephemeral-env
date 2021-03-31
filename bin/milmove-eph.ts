@@ -37,18 +37,16 @@ async function main() {
       'subnet-0705fce7326791dca',
     ],
     vpcId: 'vpc-0d454e20ab91056a7',
-    defaultSecurityGroupId: 'sg-055cf444c5cb816ec',
-    certificateArn:
-      'arn:aws:acm:us-west-2:004351505091:certificate/428c8a24-a506-41ee-8c19-f6fe681a56be',
+    defaultSecurityGroupId: 'sg-0b5c48586b23673c6',
     targetContainer: 'milmove',
     targetPort: 4000,
     healthCheckPath: '/health',
     hostedZoneId: 'ZF5E6T2ONJR1H',
     albListenerConfig: {
       arn:
-        'arn:aws:elasticloadbalancing:us-west-2:004351505091:loadbalancer/app/milmove-ephemeral-envs/80873cf1e844f0e7',
+        'arn:aws:elasticloadbalancing:us-west-2:004351505091:loadbalancer/app/drewtest/53c202d75f37cd43',
       albListenerArn:
-        'arn:aws:elasticloadbalancing:us-west-2:004351505091:listener/app/milmove-ephemeral-envs/80873cf1e844f0e7/137da1f108d3511a',
+        'arn:aws:elasticloadbalancing:us-west-2:004351505091:listener/app/drewtest/53c202d75f37cd43/e4e4d82a2246ed44',
     },
   }
 

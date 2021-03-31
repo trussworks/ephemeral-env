@@ -17,9 +17,7 @@ async function main() {
       'subnet-0705fce7326791dca',
     ],
     vpcId: 'vpc-0d454e20ab91056a7',
-    defaultSecurityGroupId: 'sg-055cf444c5cb816ec',
-    certificateArn:
-      'arn:aws:acm:us-west-2:004351505091:certificate/428c8a24-a506-41ee-8c19-f6fe681a56be',
+    defaultSecurityGroupId: 'sg-0b5c48586b23673c6',
     targetContainer: 'milmove',
     targetPort: 4000,
     healthCheckPath: '/health',
