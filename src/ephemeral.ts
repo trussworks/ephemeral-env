@@ -249,23 +249,32 @@ export async function createAlbRule(
 export async function setupDns(cfg: EphemeralEnvConfig, albCfg: AlbConfig) {
   const client = new Route53Client({ region: cfg.region })
 
+  const names = [
+    `my-${cfg.baseDomain}`,
+    `admin-${cfg.baseDomain}`,
+    `office-${cfg.baseDomain}`,
+    `prime-${cfg.baseDomain}`,
+  ]
+
+  const changes = names.map((name) => {
+    return {
+      Action: 'UPSERT',
+      ResourceRecordSet: {
+        Name: name,
+        Type: 'A',
+        AliasTarget: {
+          HostedZoneId: albCfg.canonicalHostedZoneId,
+          DNSName: `dualstack.${albCfg.dnsName}`,
+          EvaluateTargetHealth: false,
+        },
+      },
+    }
+  })
+
   const rrCmd = new ChangeResourceRecordSetsCommand({
     HostedZoneId: cfg.hostedZoneId,
     ChangeBatch: {
-      Changes: [
-        {
-          Action: 'UPSERT',
-          ResourceRecordSet: {
-            Name: `my-${cfg.baseDomain}`,
-            Type: 'A',
-            AliasTarget: {
-              HostedZoneId: albCfg.canonicalHostedZoneId,
-              DNSName: `dualstack.${albCfg.dnsName}`,
-              EvaluateTargetHealth: false,
-            },
-          },
-        },
-      ],
+      Changes: changes,
     },
   })
 
