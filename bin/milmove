@@ -39,7 +39,7 @@ git remote add truss https://github.com/trussworks/mymove.git
 git fetch truss adh-ephemeral-review
 # apply the commit with the changes. If this fails, the build will
 # fail and we can't start the app
-git cherry-pick 1d323c879 --no-commit
+git cherry-pick 8afa3e6a6 --no-commit
 
 # HACK: set some environment variables from .envrc
 # could install direnv in AWS build env, but this is less work right
