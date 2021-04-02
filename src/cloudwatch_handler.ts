@@ -8,6 +8,7 @@ import { getBuildInfoFromEnvironmentVariables } from './ephemeral'
 
 import { SlackConfig, getSlackConfig } from './slack_config'
 import { parseBuildToken, sendResponse } from './slack_handler'
+import { getMilmoveEphemeralConfig } from '../src/project_config'
 
 // create our own type because the exported
 // CodeBuildCloudWatchStateEvent has `aws.codebuild` as the literal
@@ -33,12 +34,18 @@ export async function handleEvent(
   const tokenInfo = parseBuildToken(buildInfo.buildToken)
   const buildStatus = event.detail['build-status']
   logger.debug('token info and build status', tokenInfo, buildStatus)
+  const envName = `milmove-pr-${buildInfo.prNumber}`
+  const cfg = getMilmoveEphemeralConfig(envName, 'region')
+  const envMarkdown = cfg.envDomains
+    .map(envDom => ` * <https://${envDom}>`)
+    .join('\n')
+  const markdown = 'Environment is deployed\n' + envMarkdown
   if (buildStatus === 'SUCCEEDED') {
     const r = await sendResponse(slackConfig.apiToken, {
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Environment is deployed',
-      markdown: `<https://my-milmove-pr-${buildInfo.prNumber}.mymove.sandbox.truss.coffee|Environment is deployed>`,
+      markdown: markdown,
     })
     logger.debug('Success response sent', r)
   } else {

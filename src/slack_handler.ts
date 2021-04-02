@@ -9,7 +9,8 @@ import { default as winston } from 'winston'
 
 import { SlackConfig, getSlackConfig } from './slack_config'
 import { getBuildConfig } from './build_config'
-import { BuildConfig, startMilmoveBuild } from './ephemeral'
+import { PROJECT_CONFIG } from './project_config'
+import { BuildConfig } from './ephemeral'
 
 type AppMentionPayloadEvent = {
   type: string
@@ -96,6 +97,38 @@ function hasChallengeResponse(
   return undefined
 }
 
+async function doDeploy(
+  deployCommand: string,
+  buildConfig: BuildConfig,
+  buildToken: string
+): Promise<string> {
+  const entries = Object.entries(PROJECT_CONFIG)
+  const foundEntry = entries
+    .map(([key, config]) => {
+      const re = new RegExp(config.pull_url_prefix + '/(\\d+)')
+      const found = deployCommand.match(re)
+      if (found != undefined && found.length === 2) {
+        return { projectName: key, projectConfig: config, prNumber: found[1] }
+      }
+      return undefined
+    })
+    .find(obj => obj !== undefined)
+  if (foundEntry === undefined) {
+    return "Sorry, I don't recognize that project URL"
+  }
+  try {
+    await foundEntry.projectConfig.builder(
+      buildConfig,
+      foundEntry.prNumber,
+      buildToken
+    )
+  } catch (error) {
+    winston.log(`Error starting build for ${foundEntry.projectName}`, error)
+    return `Error starting build for ${foundEntry.projectName}: ${error}`
+  }
+  return 'Starting deploy'
+}
+
 export async function respondToEvent(
   slackConfig: SlackConfig,
   buildConfig: BuildConfig,
@@ -128,28 +161,10 @@ export async function respondToEvent(
     "Sorry, I don't understand. " +
     'Try something like "deploy https://github.com/user/project/pull/123"'
 
-  const milmoveRegex = new RegExp(
-    'deploy\\s+<https://github.com/transcom/mymove/pull/(\\d+)>'
-  )
-  const found = mentionEvent.text.match(milmoveRegex)
-  if (found == undefined || found.length != 2) {
-    await sendResponse(slackConfig.apiToken, {
-      channel: mentionEvent.channel,
-      thread_ts: mentionEvent.ts,
-      markdown: helpText,
-      fallback: helpText,
-    })
-    return helpText
-  }
-  const prNumber = found[1]
-
-  const message = 'Starting deploy'
-  const buildToken = createBuildToken(mentionEvent.channel, mentionEvent.ts)
-  try {
-    startMilmoveBuild(buildConfig, prNumber, buildToken)
-  } catch (error) {
-    winston.log('Error starting build', error)
-    return `Error starting build: ${error}`
+  let message: string = helpText
+  if (mentionEvent.text.startsWith('deploy ')) {
+    const buildToken = createBuildToken(mentionEvent.channel, mentionEvent.ts)
+    message = await doDeploy(mentionEvent.text, buildConfig, buildToken)
   }
 
   const messageResponse: MessageResponse = {
@@ -158,7 +173,6 @@ export async function respondToEvent(
     fallback: message,
     markdown: message,
   }
-
   await sendResponse(slackConfig.apiToken, messageResponse)
   return undefined
 }
