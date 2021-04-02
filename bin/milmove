@@ -39,7 +39,7 @@ git remote add truss https://github.com/trussworks/mymove.git
 git fetch truss adh-ephemeral-review
 # apply the commit with the changes. If this fails, the build will
 # fail and we can't start the app
-git cherry-pick 30c0618de --no-commit
+git cherry-pick 4b688ca8c --no-commit
 
 # HACK: set some environment variables from .envrc
 # could install direnv in AWS build env, but this is less work right
@@ -199,6 +199,7 @@ docker build -t "${MILMOVE_MIGRATE_IMG}" \
 docker push "${MILMOVE_IMG}"
 docker push "${MILMOVE_MIGRATE_IMG}"
 
+# TODO: this is duplicated in the ephemeral config
 export REVIEW_BASE_DOMAIN=${ENV_NAME}.mymove.sandbox.truss.coffee
 
 export ECS_CLI_DEPLOY_DIR="${PWD}"
