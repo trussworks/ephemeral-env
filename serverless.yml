@@ -80,4 +80,14 @@ functions:
                 - "STOPPED"
               project-name:
                 - "milmove-ephemeral"
-              
+  teardown:
+    handler: src/teardown_handler.teardownHandler
+    environment:
+      SLACK_SIGNING_SECRET: ${self:custom.config.signingSecret}
+      SLACK_API_TOKEN: ${self:custom.config.apiToken}
+      DOCKER_USERNAME: ${self:custom.config.dockerUsername}
+      DOCKER_PASSWORD: ${self:custom.config.dockerPassword}
+      LOG_LEVEL: debug
+    role: ${self:custom.config.slackbotLambdaRole}
+    events:
+      - schedule: cron(15 3 * * ? *)
