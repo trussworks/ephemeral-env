@@ -18,3 +18,10 @@ export function getBuildConfig(): Promise<BuildConfig> {
     })
   })
 }
+
+export function parseBuildToken(
+  token: string
+): { channel: string; ts: string } {
+  const [channel, ts] = token.split('/')
+  return { channel: channel, ts: ts }
+}

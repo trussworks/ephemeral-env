@@ -7,9 +7,8 @@ import { default as winston } from 'winston'
 import { getBuildInfoFromEnvironmentVariables } from './ephemeral'
 
 import { SlackConfig, getSlackConfig } from './slack_config'
-import { parseBuildToken, sendResponse } from './slack_handler'
 import { getMilmoveEphemeralConfig } from '../src/project_config'
-import { WebClient } from '@slack/web-api'
+import { parseBuildToken } from './build_config'
 
 // create our own type because the exported
 // CodeBuildCloudWatchStateEvent has `aws.codebuild` as the literal
@@ -24,8 +23,6 @@ export async function handleEvent(
   logger: winston.Logger,
   event: CodeBuildCloudWatchBuildStateChangeEvent
 ): Promise<void> {
-  const slackWebClient = new WebClient(slackConfig.apiToken)
-
   const envVariables =
     event.detail['additional-information'].environment['environment-variables']
   const buildInfo = getBuildInfoFromEnvironmentVariables(envVariables)
@@ -44,21 +41,21 @@ export async function handleEvent(
     .join('\n')
   const markdown = 'Environment is deployed\n' + envMarkdown
   if (buildStatus === 'SUCCEEDED') {
-    const r = await sendResponse(slackWebClient, {
+    slackConfig.sendMarkdownResponse({
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Environment is deployed',
       markdown: markdown,
     })
-    logger.debug('Success response sent', r)
+    logger.debug('Deployed response sent')
   } else {
-    const r = await sendResponse(slackWebClient, {
+    slackConfig.sendMarkdownResponse({
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Deployment problem',
       markdown: `Deployment problem: ${buildStatus}`,
     })
-    logger.debug('Problem response sent', r)
+    logger.debug('Problem response sent')
   }
 }
 
@@ -78,8 +75,7 @@ export const cloudwatchHandler: CodeBuildCloudWatchStateHandler = async (
     transports: [new winston.transports.Console()],
   })
   winston.add(logger)
-  const slackConfig = await getSlackConfig()
-  logger.debug('Using slack config', slackConfig)
+  const slackConfig = await getSlackConfig(logger)
   logger.debug('handling event', event)
 
   await handleEvent(slackConfig, logger, event)

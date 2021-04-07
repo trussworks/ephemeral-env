@@ -176,13 +176,6 @@ export function createBuildToken(channel: string, ts: string): string {
   return [channel, ts].join('/')
 }
 
-export function parseBuildToken(
-  token: string
-): { channel: string; ts: string } {
-  const [channel, ts] = token.split('/')
-  return { channel: channel, ts: ts }
-}
-
 export const slackHandler: APIGatewayProxyHandler = async (
   event,
   _context,
