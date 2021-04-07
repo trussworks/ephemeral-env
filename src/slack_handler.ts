@@ -3,16 +3,14 @@ import {
   APIGatewayProxyHandler,
   APIGatewayProxyResult,
 } from 'aws-lambda'
-import { verifyRequestSignature } from '@slack/events-api'
-import * as web from '@slack/web-api'
 import { default as winston } from 'winston'
 
-import { SlackConfig, getSlackConfig } from './slack_config'
+import { SlackConfig, getSlackConfig, MessageResponse } from './slack_config'
 import { getBuildConfig } from './build_config'
-import { PROJECT_CONFIG } from './project_config'
+import { AllProjectConfig, getProjectConfig } from './project_config'
 import { BuildConfig } from './ephemeral'
 
-type AppMentionPayloadEvent = {
+export type AppMentionPayloadEvent = {
   type: string
   user: string
   text: string
@@ -21,7 +19,7 @@ type AppMentionPayloadEvent = {
   event_ts: string
 }
 
-type AppMentionPayloadRequest = {
+export type AppMentionPayloadRequest = {
   event: AppMentionPayloadEvent
 }
 
@@ -44,35 +42,6 @@ function isAppMentionPayloadRequest(e: any): e is AppMentionPayloadRequest {
     )
   }
   return false
-}
-
-export type MessageResponse = {
-  channel: string
-  thread_ts: string
-  fallback: string
-  markdown: string
-}
-
-export async function sendResponse(
-  apiToken: string,
-  dResponse: MessageResponse
-) {
-  const responseData: web.ChatPostMessageArguments = {
-    channel: dResponse.channel,
-    thread_ts: dResponse.thread_ts,
-    text: dResponse.fallback,
-    blocks: [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: dResponse.markdown,
-        },
-      },
-    ],
-  }
-  const webClient = new web.WebClient(apiToken)
-  await webClient.chat.postMessage(responseData)
 }
 
 function hasChallengeResponse(
@@ -98,15 +67,20 @@ function hasChallengeResponse(
 }
 
 async function doDeploy(
+  logger: winston.Logger,
   deployCommand: string,
+  allProjectConfig: AllProjectConfig,
   buildConfig: BuildConfig,
   buildToken: string
 ): Promise<string> {
-  const entries = Object.entries(PROJECT_CONFIG)
+  const entries = Object.entries(allProjectConfig)
   const foundEntry = entries
     .map(([key, config]) => {
       const re = new RegExp(config.pull_url_prefix + '/(\\d+)')
       const found = deployCommand.match(re)
+      logger.debug(
+        `finding deploy for cmd '${deployCommand}' with re '${re}', found: ${found}`
+      )
       if (found != undefined && found.length === 2) {
         return { projectName: key, projectConfig: config, prNumber: found[1] }
       }
@@ -132,27 +106,35 @@ async function doDeploy(
 export async function respondToEvent(
   slackConfig: SlackConfig,
   buildConfig: BuildConfig,
+  allProjectConfig: AllProjectConfig,
   logger: winston.Logger,
   event: APIGatewayProxyEvent
-): Promise<string | undefined> {
-  const requestSignature = event.headers['X-Slack-Signature'] || ''
-  const requestTimestamp = parseInt(
-    event.headers['X-Slack-Request-Timestamp'] || '',
-    10
-  )
-
+): Promise<APIGatewayProxyResult> {
   // will throw if verify fails
-  verifyRequestSignature({
-    signingSecret: slackConfig.signingSecret,
-    requestSignature: requestSignature,
-    requestTimestamp: requestTimestamp,
-    body: event.body || '',
-  })
+  try {
+    slackConfig.verifySignature(event.headers, event.body)
+  } catch (error) {
+    return {
+      isBase64Encoded: false,
+      statusCode: 401,
+      headers: {
+        'Content-type': 'application/json',
+      },
+      body: '{"error":"Unauthorized"}',
+    }
+  }
 
-  const req = JSON.parse(event.body || '')
+  const req = event.body ? JSON.parse(event.body) : {}
   if (!isAppMentionPayloadRequest(req)) {
     logger.error('Request is not app mention request:', req)
-    throw new Error('Request is not app mention request')
+    return {
+      isBase64Encoded: false,
+      statusCode: 400,
+      headers: {
+        'Content-type': 'application/json',
+      },
+      body: '{"error":"Invalid Request"}',
+    }
   }
 
   const mentionEvent = req.event
@@ -162,9 +144,15 @@ export async function respondToEvent(
     'Try something like "deploy https://github.com/user/project/pull/123"'
 
   let message: string = helpText
-  if (mentionEvent.text.startsWith('deploy ')) {
+  if (mentionEvent.text.includes('deploy ')) {
     const buildToken = createBuildToken(mentionEvent.channel, mentionEvent.ts)
-    message = await doDeploy(mentionEvent.text, buildConfig, buildToken)
+    message = await doDeploy(
+      logger,
+      mentionEvent.text,
+      allProjectConfig,
+      buildConfig,
+      buildToken
+    )
   }
 
   const messageResponse: MessageResponse = {
@@ -173,8 +161,15 @@ export async function respondToEvent(
     fallback: message,
     markdown: message,
   }
-  await sendResponse(slackConfig.apiToken, messageResponse)
-  return undefined
+  await slackConfig.sendMarkdownResponse(messageResponse)
+  return {
+    isBase64Encoded: false,
+    statusCode: 200,
+    headers: {
+      'Content-type': 'application/json',
+    },
+    body: '{"ok":"ok"}',
+  }
 }
 
 export function createBuildToken(channel: string, ts: string): string {
@@ -206,8 +201,7 @@ export const slackHandler: APIGatewayProxyHandler = async (
   winston.add(logger)
 
   try {
-    const slackConfig = await getSlackConfig()
-    logger.debug('Using slack config', slackConfig)
+    const slackConfig = await getSlackConfig(logger)
 
     const buildConfig = await getBuildConfig()
     logger.debug('Using build config', buildConfig)
@@ -216,29 +210,18 @@ export const slackHandler: APIGatewayProxyHandler = async (
     if (challengeResponse !== undefined) {
       return challengeResponse
     }
-    const responseString = await respondToEvent(
+
+    const allProjectConfig = getProjectConfig()
+
+    const response = await respondToEvent(
       slackConfig,
       buildConfig,
+      allProjectConfig,
       logger,
       event
     )
-    logger.debug('lambda response', responseString)
-    if (responseString !== undefined) {
-      return {
-        isBase64Encoded: false,
-        statusCode: 200,
-        headers: {
-          'Content-type': 'application/json',
-        },
-        body: JSON.stringify({ text: responseString }),
-      }
-    } else {
-      return {
-        isBase64Encoded: false,
-        statusCode: 200,
-        body: '',
-      }
-    }
+    logger.debug('lambda response', response)
+    return response
   } catch (error) {
     logger.error('Error', error)
     callback(error)

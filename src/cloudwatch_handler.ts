@@ -9,6 +9,7 @@ import { getBuildInfoFromEnvironmentVariables } from './ephemeral'
 import { SlackConfig, getSlackConfig } from './slack_config'
 import { parseBuildToken, sendResponse } from './slack_handler'
 import { getMilmoveEphemeralConfig } from '../src/project_config'
+import { WebClient } from '@slack/web-api'
 
 // create our own type because the exported
 // CodeBuildCloudWatchStateEvent has `aws.codebuild` as the literal
@@ -23,6 +24,8 @@ export async function handleEvent(
   logger: winston.Logger,
   event: CodeBuildCloudWatchBuildStateChangeEvent
 ): Promise<void> {
+  const slackWebClient = new WebClient(slackConfig.apiToken)
+
   const envVariables =
     event.detail['additional-information'].environment['environment-variables']
   const buildInfo = getBuildInfoFromEnvironmentVariables(envVariables)
@@ -41,7 +44,7 @@ export async function handleEvent(
     .join('\n')
   const markdown = 'Environment is deployed\n' + envMarkdown
   if (buildStatus === 'SUCCEEDED') {
-    const r = await sendResponse(slackConfig.apiToken, {
+    const r = await sendResponse(slackWebClient, {
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Environment is deployed',
@@ -49,7 +52,7 @@ export async function handleEvent(
     })
     logger.debug('Success response sent', r)
   } else {
-    const r = await sendResponse(slackConfig.apiToken, {
+    const r = await sendResponse(slackWebClient, {
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Deployment problem',

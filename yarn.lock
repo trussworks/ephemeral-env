@@ -1625,6 +1625,11 @@
     minimatch "^3.0.4"
     strip-json-comments "^3.1.1"
 
+"@fluffy-spoon/substitute@^1.200.0":
+  version "1.200.0"
+  resolved "https://registry.yarnpkg.com/@fluffy-spoon/substitute/-/substitute-1.200.0.tgz#3bad80969beca39c83edbf420d9387c707e70ace"
+  integrity sha512-jfifOZ3SQ+1ieIcSWfv+9ecP4yz+zDVufAy74+ptFmrfuy1bNoIKGhvXQ9Vas8129bgpQexqnv0PpN/HwrxtQw==
+
 "@hapi/accept@^3.2.4":
   version "3.2.4"
   resolved "https://registry.yarnpkg.com/@hapi/accept/-/accept-3.2.4.tgz#687510529493fe1d7d47954c31aff360d9364bd1"

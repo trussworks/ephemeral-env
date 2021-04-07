@@ -8,6 +8,7 @@
     "test:watch": "jest --watch"
   },
   "devDependencies": {
+    "@fluffy-spoon/substitute": "^1.200.0",
     "@types/aws-lambda": "^8.10.73",
     "@types/jest": "^24.0.18",
     "@types/js-yaml": "^4.0.0",
