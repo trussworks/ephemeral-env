@@ -56,8 +56,6 @@ export type EphemeralEnvConfig = {
 
 export type BuildConfig = {
   region: string
-  dockerUsername: string
-  dockerPassword: string
 }
 
 export type AlbConfig = {
@@ -285,6 +283,30 @@ export async function createEphemeralExistingAlb(
     return Promise.reject(error)
   }
 }
+export async function startMilmoveTeardown(cfg: BuildConfig): Promise<string> {
+  const client = new CodeBuildClient({ region: cfg.region })
+  const buildCmd = new StartBuildCommand({
+    projectName: 'milmove-ephemeral',
+    environmentVariablesOverride: [
+      { name: 'PROJECT', value: 'milmove' },
+      { name: 'ACTION', value: 'teardown' },
+    ],
+  })
+  try {
+    const buildResult = await client.send(buildCmd)
+    console.log('buildResult', buildResult)
+    if (
+      buildResult === undefined ||
+      buildResult.build === undefined ||
+      buildResult.build.arn === undefined
+    ) {
+      return Promise.reject('Error starting build')
+    }
+    return Promise.resolve(buildResult.build.arn)
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
 
 export async function startMilmoveBuild(
   cfg: BuildConfig,
@@ -296,22 +318,10 @@ export async function startMilmoveBuild(
     projectName: 'milmove-ephemeral',
     idempotencyToken: token,
     environmentVariablesOverride: [
-      {
-        name: 'MILMOVE_PR',
-        value: pr,
-      },
-      {
-        name: 'DOCKER_USERNAME',
-        value: cfg.dockerUsername,
-      },
-      {
-        name: 'DOCKER_PASSWORD',
-        value: cfg.dockerPassword,
-      },
-      {
-        name: 'BUILD_TOKEN',
-        value: token,
-      },
+      { name: 'PROJECT', value: 'milmove' },
+      { name: 'ACTION', value: 'build' },
+      { name: 'PR', value: pr },
+      { name: 'BUILD_TOKEN', value: token },
     ],
   })
   try {

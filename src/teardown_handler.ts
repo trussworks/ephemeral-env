@@ -1,19 +1,16 @@
 import { ScheduledEvent, ScheduledHandler } from 'aws-lambda'
 import { default as winston } from 'winston'
-import { destroyEphemeral } from '../src/ephemeral'
 
-import { getMilmoveEphemeralConfig } from '../src/project_config'
+import { AllProjectConfig, getProjectConfig } from './project_config'
 
 export async function handleEvent(
   logger: winston.Logger,
-  event: ScheduledEvent
+  event: ScheduledEvent,
+  allProjectConfig: AllProjectConfig
 ): Promise<void> {
-  logger.info('Tearing down')
-  const cfg = getMilmoveEphemeralConfig('destroy', event.region)
-  try {
-    await destroyEphemeral(cfg)
-  } catch (error) {
-    logger.error('Error destroying ephemeral envs', error)
+  logger.info('Starting teardown')
+  for (const config of Object.values(allProjectConfig)) {
+    await config.teardown({ region: event.region })
   }
 }
 
@@ -34,7 +31,8 @@ export const teardownHandler: ScheduledHandler = async (
   })
   winston.add(logger)
   logger.debug('handling event', event)
+  const allProjectConfig = getProjectConfig()
 
-  await handleEvent(logger, event)
+  await handleEvent(logger, event, allProjectConfig)
   // scheduled events have no response
 }

@@ -12,11 +12,13 @@ const mockSendMarkdownResponse = jest.fn()
 
 const mockMilmoveBuilder = jest.fn()
 const mockMilmoveInfo = jest.fn()
+const mockMilmoveTeardown = jest.fn()
 const fakeAllProjectConfig: AllProjectConfig = {
   milmove: {
     pull_url_prefix: 'https://github.com/transcom/mymove/pull',
     builder: mockMilmoveBuilder,
     info: mockMilmoveInfo,
+    teardown: mockMilmoveTeardown,
   },
 }
 const fakeSlackConfig: SlackConfig = {
@@ -31,8 +33,6 @@ const fakeSlackConfig: SlackConfig = {
 
 const fakeBuildConfig: BuildConfig = {
   region: 'fakeRegion',
-  dockerUsername: 'user',
-  dockerPassword: 'pass',
 }
 
 describe('respondToEvent', () => {

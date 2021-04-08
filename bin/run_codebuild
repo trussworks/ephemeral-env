@@ -1,0 +1,18 @@
+#!/bin/bash
+
+if [[ -z "${PROJECT}" ]]; then
+    echo "Missing PROJECT" >&2
+    exit 2
+fi
+
+if [[ -z "${ACTION}" ]]; then
+    echo "Missing ACTION" >&2
+    exit 2
+fi
+
+if [[ ! -x "${PROJECT}" ]]; then
+    echo "Cannot find executable ${PROJECT}" >&2
+    exit 1
+fi
+
+exec "${PROJECT}" "${ACTION}"

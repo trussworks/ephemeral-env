@@ -1,8 +1,14 @@
-import { startMilmoveBuild, EphemeralEnvConfig, BuildConfig } from './ephemeral'
+import {
+  startMilmoveBuild,
+  startMilmoveTeardown,
+  EphemeralEnvConfig,
+  BuildConfig,
+} from './ephemeral'
 export type ProjectConfig = {
   pull_url_prefix: string
   builder(cfg: BuildConfig, pr: string, token: string): Promise<string>
   info(pr: string): string
+  teardown(cfg: BuildConfig): Promise<string>
 }
 export type AllProjectConfig = {
   [project: string]: ProjectConfig
@@ -13,6 +19,7 @@ export function getProjectConfig(): AllProjectConfig {
       pull_url_prefix: 'https://github.com/transcom/mymove/pull',
       builder: startMilmoveBuild,
       info: infoForMilmoveDeploy,
+      teardown: startMilmoveTeardown,
     },
   }
 }

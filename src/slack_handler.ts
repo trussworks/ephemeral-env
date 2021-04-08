@@ -6,7 +6,7 @@ import {
 import { default as winston } from 'winston'
 
 import { SlackConfig, getSlackConfig, MessageResponse } from './slack_config'
-import { getBuildConfig } from './build_config'
+import { getBuildConfig, createBuildToken } from './build_config'
 import {
   AllProjectConfig,
   ProjectConfig,
@@ -219,10 +219,6 @@ export async function respondToEvent(
     },
     body: '{"ok":"ok"}',
   }
-}
-
-export function createBuildToken(channel: string, ts: string): string {
-  return [channel, ts].join('/')
 }
 
 export const slackHandler: APIGatewayProxyHandler = async (
