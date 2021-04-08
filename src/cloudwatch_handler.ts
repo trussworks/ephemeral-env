@@ -5,9 +5,9 @@ import {
 } from 'aws-lambda'
 import { default as winston } from 'winston'
 import { getBuildInfoFromEnvironmentVariables } from './ephemeral'
+import { AllProjectConfig, getProjectConfig } from './project_config'
 
 import { SlackConfig, getSlackConfig } from './slack_config'
-import { getMilmoveEphemeralConfig } from '../src/project_config'
 import { parseBuildToken } from './build_config'
 
 // create our own type because the exported
@@ -20,6 +20,7 @@ type CodeBuildCloudWatchBuildStateChangeEvent = EventBridgeEvent<
 
 export async function handleEvent(
   slackConfig: SlackConfig,
+  allProjectConfig: AllProjectConfig,
   logger: winston.Logger,
   event: CodeBuildCloudWatchBuildStateChangeEvent
 ): Promise<void> {
@@ -33,15 +34,21 @@ export async function handleEvent(
 
   const tokenInfo = parseBuildToken(buildInfo.buildToken)
   const buildStatus = event.detail['build-status']
-  logger.debug('token info and build status', tokenInfo, buildStatus)
-  const envName = `milmove-pr-${buildInfo.prNumber}`
-  const cfg = getMilmoveEphemeralConfig(envName, 'region')
-  const envMarkdown = cfg.envDomains
-    .map(envDom => ` * <https://${envDom}>`)
-    .join('\n')
-  const markdown = 'Environment is deployed\n' + envMarkdown
+  logger.debug('token info and build status', tokenInfo, {
+    buildStatus: buildStatus,
+  })
+  // HACK: For now hardcode this. In the future, figure it out from
+  // build info
+  const project = 'milmove'
+
+  const projectConfig = allProjectConfig[project]
+  if (projectConfig === undefined) {
+    logger.warn(`Cannot get project config for project: '${project}'`)
+  }
   if (buildStatus === 'SUCCEEDED') {
-    slackConfig.sendMarkdownResponse({
+    const markdown =
+      'Environment is deployed\n' + projectConfig.info(buildInfo.prNumber)
+    await slackConfig.sendMarkdownResponse({
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Environment is deployed',
@@ -49,7 +56,7 @@ export async function handleEvent(
     })
     logger.debug('Deployed response sent')
   } else {
-    slackConfig.sendMarkdownResponse({
+    await slackConfig.sendMarkdownResponse({
       channel: tokenInfo.channel,
       thread_ts: tokenInfo.ts,
       fallback: 'Deployment problem',
@@ -77,7 +84,8 @@ export const cloudwatchHandler: CodeBuildCloudWatchStateHandler = async (
   winston.add(logger)
   const slackConfig = await getSlackConfig(logger)
   logger.debug('handling event', event)
+  const allProjectConfig = getProjectConfig()
 
-  await handleEvent(slackConfig, logger, event)
+  await handleEvent(slackConfig, allProjectConfig, logger, event)
   // cloudwatch events have no response
 }

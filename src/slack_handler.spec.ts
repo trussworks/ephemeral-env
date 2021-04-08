@@ -11,10 +11,12 @@ const mockedLogger = Substitute.for<winston.Logger>()
 const mockSendMarkdownResponse = jest.fn()
 
 const mockMilmoveBuilder = jest.fn()
+const mockMilmoveInfo = jest.fn()
 const fakeAllProjectConfig: AllProjectConfig = {
   milmove: {
     pull_url_prefix: 'https://github.com/transcom/mymove/pull',
     builder: mockMilmoveBuilder,
+    info: mockMilmoveInfo,
   },
 }
 const fakeSlackConfig: SlackConfig = {
@@ -94,7 +96,7 @@ describe('respondToEvent', () => {
       event: {
         type: 'app_mention',
         user: 'user',
-        text: 'deploy https://github.com/transcom/mymove/pull/123',
+        text: 'deploy <https://github.com/transcom/mymove/pull/123>',
         ts: 'fake_ts',
         channel: 'fake_channel',
         event_ts: 'fake_event_ts',

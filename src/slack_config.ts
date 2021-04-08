@@ -47,6 +47,7 @@ export function getSlackConfig(logger: winston.Logger): Promise<SlackConfig> {
         })
       },
       async sendMarkdownResponse(dResponse: MessageResponse): Promise<boolean> {
+        logger.debug('Sending markdown message', dResponse)
         const responseData: ChatPostMessageArguments = {
           channel: dResponse.channel,
           thread_ts: dResponse.thread_ts,

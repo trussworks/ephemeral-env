@@ -7,7 +7,11 @@ import { default as winston } from 'winston'
 
 import { SlackConfig, getSlackConfig, MessageResponse } from './slack_config'
 import { getBuildConfig } from './build_config'
-import { AllProjectConfig, getProjectConfig } from './project_config'
+import {
+  AllProjectConfig,
+  ProjectConfig,
+  getProjectConfig,
+} from './project_config'
 import { BuildConfig } from './ephemeral'
 
 export type AppMentionPayloadEvent = {
@@ -66,20 +70,24 @@ function hasChallengeResponse(
   return undefined
 }
 
-async function doDeploy(
+type ProjectAndPr = {
+  projectName: string
+  projectConfig: ProjectConfig
+  prNumber: string
+}
+
+function getProjectAndPrFromMessage(
   logger: winston.Logger,
-  deployCommand: string,
   allProjectConfig: AllProjectConfig,
-  buildConfig: BuildConfig,
-  buildToken: string
-): Promise<string> {
+  message: string
+): ProjectAndPr | undefined {
   const entries = Object.entries(allProjectConfig)
-  const foundEntry = entries
+  return entries
     .map(([key, config]) => {
       const re = new RegExp(config.pull_url_prefix + '/(\\d+)')
-      const found = deployCommand.match(re)
+      const found = message.match(re)
       logger.debug(
-        `finding deploy for cmd '${deployCommand}' with re '${re}', found: ${found}`
+        `finding pr for message '${message}' with re '${re}', found: ${found}`
       )
       if (found != undefined && found.length === 2) {
         return { projectName: key, projectConfig: config, prNumber: found[1] }
@@ -87,7 +95,22 @@ async function doDeploy(
       return undefined
     })
     .find(obj => obj !== undefined)
+}
+
+async function doDeploy(
+  logger: winston.Logger,
+  deployCommand: string,
+  allProjectConfig: AllProjectConfig,
+  buildConfig: BuildConfig,
+  buildToken: string
+): Promise<string> {
+  const foundEntry = getProjectAndPrFromMessage(
+    logger,
+    allProjectConfig,
+    deployCommand
+  )
   if (foundEntry === undefined) {
+    logger.warn('Did not find project for message', deployCommand)
     return "Sorry, I don't recognize that project URL"
   }
   try {
@@ -100,7 +123,26 @@ async function doDeploy(
     winston.log(`Error starting build for ${foundEntry.projectName}`, error)
     return `Error starting build for ${foundEntry.projectName}: ${error}`
   }
+  logger.warn(`Starting deploy for ${foundEntry.projectName}`)
   return 'Starting deploy'
+}
+
+function doInfo(
+  logger: winston.Logger,
+  infoCommand: string,
+  allProjectConfig: AllProjectConfig
+): string {
+  const foundEntry = getProjectAndPrFromMessage(
+    logger,
+    allProjectConfig,
+    infoCommand
+  )
+  if (foundEntry === undefined) {
+    logger.warn('Did not find project for message', infoCommand)
+    return "Sorry, I don't recognize that project URL"
+  }
+
+  return foundEntry.projectConfig.info(foundEntry.prNumber)
 }
 
 export async function respondToEvent(
@@ -114,6 +156,7 @@ export async function respondToEvent(
   try {
     slackConfig.verifySignature(event.headers, event.body)
   } catch (error) {
+    logger.error('Error verifying signature')
     return {
       isBase64Encoded: false,
       statusCode: 401,
@@ -144,6 +187,7 @@ export async function respondToEvent(
     'Try something like "deploy https://github.com/user/project/pull/123"'
 
   let message: string = helpText
+  let markdown: string | undefined = undefined
   if (mentionEvent.text.includes('deploy ')) {
     const buildToken = createBuildToken(mentionEvent.channel, mentionEvent.ts)
     message = await doDeploy(
@@ -153,13 +197,18 @@ export async function respondToEvent(
       buildConfig,
       buildToken
     )
+  } else if (mentionEvent.text.includes('info ')) {
+    markdown = doInfo(logger, mentionEvent.text, allProjectConfig)
   }
 
+  if (markdown === undefined) {
+    markdown = message
+  }
   const messageResponse: MessageResponse = {
     channel: mentionEvent.channel,
     thread_ts: mentionEvent.ts,
     fallback: message,
-    markdown: message,
+    markdown: markdown,
   }
   await slackConfig.sendMarkdownResponse(messageResponse)
   return {
