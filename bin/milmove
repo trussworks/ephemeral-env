@@ -5,11 +5,6 @@ if [[ -z "${ACTION}" ]]; then
     exit 2
 fi
 
-if [[ -z "${PR}" ]]; then
-    echo "Missing PR" >&2
-    exit 2
-fi
-
 if [[ -z "${AWS_REGION}" ]]; then
     echo "Missing AWS_REGION" >&2
     exit 2
@@ -23,6 +18,11 @@ yarn
 eph_dir=${PWD}
 
 function do_build() {
+
+    if [[ -z "${PR}" ]]; then
+        echo "Missing PR" >&2
+        exit 2
+    fi
 
     # create a directory for our work
     rm -rf milmove_pr && mkdir milmove_pr && cd milmove_pr
