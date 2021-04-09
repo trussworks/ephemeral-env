@@ -148,17 +148,17 @@ function do_build() {
     exec ./node_modules/.bin/ts-node -P tsconfig.bin.json bin/milmove-eph.ts
 }
 
-function do_destroy() {
+function do_teardown() {
     cd "${eph_dir}"
-    exec ./node_modules/.bin/ts-node -P tsconfig.bin.json bin/milmove-eph-destroy.ts
+    exec ./node_modules/.bin/ts-node -P tsconfig.bin.json bin/milmove-eph-teardown.ts
 }
 
 case ${ACTION} in
     build)
         do_build
         ;;
-    destroy)
-        do_destroy
+    teardown)
+        do_teardown
         ;;
     *)
         echo "Unknown ACTION: '${ACTION}' > &2"

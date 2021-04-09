@@ -1,4 +1,4 @@
-import { destroyEphemeral } from '../src/ephemeral'
+import { teardownEphemeral } from '../src/ephemeral'
 import { getMilmoveEphemeralConfig } from '../src/project_config'
 
 async function main() {
@@ -11,7 +11,7 @@ async function main() {
   const cfg = getMilmoveEphemeralConfig('destroy', region)
 
   try {
-    const tgConfig = await destroyEphemeral(cfg)
+    const tgConfig = await teardownEphemeral(cfg)
     console.log(tgConfig)
   } catch (error) {
     console.log('error', error)

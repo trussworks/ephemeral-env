@@ -590,7 +590,7 @@ export async function destroyEphemeralServices(cfg: EphemeralEnvConfig) {
   }
 }
 
-export async function destroyEphemeral(cfg: EphemeralEnvConfig) {
+export async function teardownEphemeral(cfg: EphemeralEnvConfig) {
   await destroyEphemeralServices(cfg)
   await destroyEphemeralRules(cfg)
   await destroyEphemeralTargetGroups(cfg)
