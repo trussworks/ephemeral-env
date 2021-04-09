@@ -314,10 +314,12 @@ export async function startMilmoveBuild(
   token: string
 ): Promise<string> {
   const client = new CodeBuildClient({ region: cfg.region })
+  const dockerPasswordHack = process.env.DOCKER_PASSWORD || 'docker_password'
   const buildCmd = new StartBuildCommand({
     projectName: 'milmove-ephemeral',
     idempotencyToken: token,
     environmentVariablesOverride: [
+      { name: 'DOCKER_PASSWORD', value: dockerPasswordHack },
       { name: 'PROJECT', value: 'milmove' },
       { name: 'ACTION', value: 'build' },
       { name: 'PR', value: pr },
