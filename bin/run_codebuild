@@ -10,9 +10,11 @@ if [[ -z "${ACTION}" ]]; then
     exit 2
 fi
 
-if [[ ! -x "${PROJECT}" ]]; then
-    echo "Cannot find executable ${PROJECT}" >&2
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+if [[ ! -x "${DIR}/${PROJECT}" ]]; then
+    echo "Cannot find executable ${DIR}/${PROJECT}" >&2
     exit 1
 fi
 
-exec "${PROJECT}" "${ACTION}"
+exec "${DIR}/${PROJECT}" "${ACTION}"
