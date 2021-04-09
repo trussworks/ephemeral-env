@@ -48,9 +48,14 @@ export function getMilmoveEphemeralConfig(
     ],
     clusterName: 'milmove-ephemeral',
     subnetIds: [
-      'subnet-052eea16e823de366',
-      'subnet-04e5f51788abc2ecd',
-      'subnet-0705fce7326791dca',
+      // these are the new private subnets
+      'subnet-0d29ef4d8ccfe1c5e',
+      'subnet-0cca6a5a2edd62865',
+      'subnet-017c11064475ac7ff',
+      // these are the old public subnets
+      // 'subnet-052eea16e823de366',
+      // 'subnet-04e5f51788abc2ecd',
+      // 'subnet-0705fce7326791dca',
     ],
     vpcId: 'vpc-0d454e20ab91056a7',
     defaultSecurityGroupId: 'sg-0b5c48586b23673c6',

@@ -424,7 +424,7 @@ export function runEcsCli(
         awsvpc_configuration: {
           subnets: cfg.subnetIds,
           security_groups: [cfg.defaultSecurityGroupId],
-          assign_public_ip: 'ENABLED',
+          assign_public_ip: 'DISABLED',
         },
       },
     }
