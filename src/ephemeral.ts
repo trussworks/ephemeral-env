@@ -351,7 +351,7 @@ export function getBuildInfoFromEnvironmentVariables(
   environmentVariables: EnvironmentVariable[]
 ): BuildInfo | undefined {
   const token = environmentVariables.find(env => env.name === 'BUILD_TOKEN')
-  const prNumber = environmentVariables.find(env => env.name === 'MILMOVE_PR')
+  const prNumber = environmentVariables.find(env => env.name === 'PR')
   if (
     token === undefined ||
     token.value === undefined ||
