@@ -37,11 +37,8 @@ import {
   EnvironmentVariable,
 } from '@aws-sdk/client-codebuild'
 
-export type EphemeralEnvConfig = {
+export type EphemeralSharedConfig = {
   region: string
-  envName: string
-  envBaseDomain: string
-  envDomains: string[]
   clusterName: string
   subnetIds: string[]
   defaultSecurityGroupId: string
@@ -53,6 +50,16 @@ export type EphemeralEnvConfig = {
   albArn: string
   albListenerArn: string
 }
+
+export type EphemeralEnvConfig = {
+  envName: string
+  envBaseDomain: string
+  envDomains: string[]
+}
+
+export type GetEphemeralEnvConfigFunction = (
+  envName: string
+) => EphemeralEnvConfig
 
 export type BuildConfig = {
   region: string
@@ -73,13 +80,13 @@ export type TargetGroupConfig = {
   arn: string
 }
 
-export async function createAlbRule(
-  cfg: EphemeralEnvConfig
-): Promise<AlbAndTgConfig> {
-  const elbClient = new ElasticLoadBalancingV2Client({ region: cfg.region })
+async function findAlb(sharedCfg: EphemeralSharedConfig): Promise<AlbConfig> {
+  const elbClient = new ElasticLoadBalancingV2Client({
+    region: sharedCfg.region,
+  })
 
   const describeCmd = new DescribeLoadBalancersCommand({
-    LoadBalancerArns: [cfg.albArn],
+    LoadBalancerArns: [sharedCfg.albArn],
   })
 
   let albConfig: AlbConfig | undefined
@@ -103,11 +110,22 @@ export async function createAlbRule(
     console.log('Cannot get Alb Data', error)
     return Promise.reject(error)
   }
-
   if (albConfig === undefined) {
     return Promise.reject('Cannot get ALB data')
   }
 
+  return Promise.resolve(albConfig)
+}
+
+async function createAlbRule(
+  cfg: EphemeralEnvConfig,
+  sharedCfg: EphemeralSharedConfig
+): Promise<AlbAndTgConfig> {
+  const albConfig = await findAlb(sharedCfg)
+
+  const elbClient = new ElasticLoadBalancingV2Client({
+    region: sharedCfg.region,
+  })
   const dtgCmd = new DescribeTargetGroupsCommand({
     Names: [`${cfg.envName}-tg`],
   })
@@ -134,14 +152,14 @@ export async function createAlbRule(
     const tgCmd = new CreateTargetGroupCommand({
       Name: `${cfg.envName}-tg`,
       Protocol: 'HTTP',
-      Port: cfg.targetPort,
-      HealthCheckPort: `${cfg.targetPort}`,
-      HealthCheckPath: cfg.healthCheckPath,
+      Port: sharedCfg.targetPort,
+      HealthCheckPort: `${sharedCfg.targetPort}`,
+      HealthCheckPath: sharedCfg.healthCheckPath,
       HealthCheckIntervalSeconds: 60,
       HealthCheckTimeoutSeconds: 45,
       HealthyThresholdCount: 2,
       TargetType: 'ip',
-      VpcId: cfg.vpcId,
+      VpcId: sharedCfg.vpcId,
       Tags: [
         { Key: 'ephemeral', Value: 'true' },
         { Key: 'ephemeralEnvName', Value: cfg.envName },
@@ -170,7 +188,7 @@ export async function createAlbRule(
   }
 
   const dRuleCmd = new DescribeRulesCommand({
-    ListenerArn: cfg.albListenerArn,
+    ListenerArn: sharedCfg.albListenerArn,
     PageSize: 100,
   })
 
@@ -217,7 +235,7 @@ export async function createAlbRule(
       },
     ],
     Priority: priorityCount,
-    ListenerArn: cfg.albListenerArn,
+    ListenerArn: sharedCfg.albListenerArn,
     Tags: [
       { Key: 'ephemeral', Value: 'true' },
       { Key: 'ephemeralEnvName', Value: cfg.envName },
@@ -235,8 +253,12 @@ export async function createAlbRule(
   })
 }
 
-export async function setupDns(cfg: EphemeralEnvConfig, albCfg: AlbConfig) {
-  const client = new Route53Client({ region: cfg.region })
+export async function setupDns(
+  cfg: EphemeralEnvConfig,
+  sharedCfg: EphemeralSharedConfig,
+  albCfg: AlbConfig
+) {
+  const client = new Route53Client({ region: sharedCfg.region })
 
   const changes = cfg.envDomains.map(name => {
     return {
@@ -254,13 +276,12 @@ export async function setupDns(cfg: EphemeralEnvConfig, albCfg: AlbConfig) {
   })
 
   const rrCmd = new ChangeResourceRecordSetsCommand({
-    HostedZoneId: cfg.hostedZoneId,
+    HostedZoneId: sharedCfg.hostedZoneId,
     ChangeBatch: {
       Changes: changes,
     },
   })
 
-  console.log('DREW DEBUG rrCmd', JSON.stringify(rrCmd))
   try {
     const rrData = await client.send(rrCmd)
     console.log('rrData', rrData)
@@ -271,56 +292,36 @@ export async function setupDns(cfg: EphemeralEnvConfig, albCfg: AlbConfig) {
 }
 
 export async function createEphemeralExistingAlb(
-  cfg: EphemeralEnvConfig
+  cfg: EphemeralEnvConfig,
+  sharedCfg: EphemeralSharedConfig
 ): Promise<TargetGroupConfig> {
   try {
-    const albAndTgConfig = await createAlbRule(cfg)
+    const albAndTgConfig = await createAlbRule(cfg, sharedCfg)
     console.log('albAndTgConfig', albAndTgConfig)
-    const rrStatus = await setupDns(cfg, albAndTgConfig.albConfig)
+    const rrStatus = await setupDns(cfg, sharedCfg, albAndTgConfig.albConfig)
     console.log('rrStatus', rrStatus)
     return Promise.resolve(albAndTgConfig.tgConfig)
   } catch (error) {
     return Promise.reject(error)
   }
 }
-export async function startMilmoveTeardown(cfg: BuildConfig): Promise<string> {
-  const client = new CodeBuildClient({ region: cfg.region })
-  const buildCmd = new StartBuildCommand({
-    projectName: 'milmove-ephemeral',
-    environmentVariablesOverride: [
-      { name: 'PROJECT', value: 'milmove' },
-      { name: 'ACTION', value: 'teardown' },
-    ],
-  })
-  try {
-    const buildResult = await client.send(buildCmd)
-    console.log('buildResult', buildResult)
-    if (
-      buildResult === undefined ||
-      buildResult.build === undefined ||
-      buildResult.build.arn === undefined
-    ) {
-      return Promise.reject('Error starting build')
-    }
-    return Promise.resolve(buildResult.build.arn)
-  } catch (error) {
-    return Promise.reject(error)
-  }
+export type BuildInfo = {
+  prNumber: string
+  buildToken: string
 }
 
-export async function startMilmoveBuild(
+export async function startBuild(
   cfg: BuildConfig,
+  project: string,
   pr: string,
   token: string
 ): Promise<string> {
   const client = new CodeBuildClient({ region: cfg.region })
-  const dockerPasswordHack = process.env.DOCKER_PASSWORD || 'docker_password'
   const buildCmd = new StartBuildCommand({
     projectName: 'milmove-ephemeral',
     idempotencyToken: token,
     environmentVariablesOverride: [
-      { name: 'DOCKER_PASSWORD', value: dockerPasswordHack },
-      { name: 'PROJECT', value: 'milmove' },
+      { name: 'PROJECT', value: project },
       { name: 'ACTION', value: 'build' },
       { name: 'PR', value: pr },
       { name: 'BUILD_TOKEN', value: token },
@@ -342,9 +343,32 @@ export async function startMilmoveBuild(
   }
 }
 
-export type BuildInfo = {
-  prNumber: string
-  buildToken: string
+export async function startTeardown(
+  cfg: BuildConfig,
+  project: string
+): Promise<string> {
+  const client = new CodeBuildClient({ region: cfg.region })
+  const buildCmd = new StartBuildCommand({
+    projectName: 'milmove-ephemeral',
+    environmentVariablesOverride: [
+      { name: 'PROJECT', value: project },
+      { name: 'ACTION', value: 'teardown' },
+    ],
+  })
+  try {
+    const buildResult = await client.send(buildCmd)
+    console.log('buildResult', buildResult)
+    if (
+      buildResult === undefined ||
+      buildResult.build === undefined ||
+      buildResult.build.arn === undefined
+    ) {
+      return Promise.reject('Error starting build')
+    }
+    return Promise.resolve(buildResult.build.arn)
+  } catch (error) {
+    return Promise.reject(error)
+  }
 }
 
 export function getBuildInfoFromEnvironmentVariables(
@@ -408,6 +432,7 @@ function isValidEcsParams(ecsParams: any): ecsParams is EcsParams {
 
 export function runEcsCli(
   cfg: EphemeralEnvConfig,
+  sharedCfg: EphemeralSharedConfig,
   tgConfig: TargetGroupConfig
 ): boolean {
   try {
@@ -422,8 +447,8 @@ export function runEcsCli(
     ecsParams['run_params'] = {
       network_configuration: {
         awsvpc_configuration: {
-          subnets: cfg.subnetIds,
-          security_groups: [cfg.defaultSecurityGroupId],
+          subnets: sharedCfg.subnetIds,
+          security_groups: [sharedCfg.defaultSecurityGroupId],
           assign_public_ip: 'DISABLED',
         },
       },
@@ -445,13 +470,13 @@ export function runEcsCli(
     '--create-log-groups',
     '--force-deployment',
     '--cluster',
-    cfg.clusterName,
+    sharedCfg.clusterName,
     '--launch-type',
     'FARGATE',
     '--timeout',
     '7',
     '--target-groups',
-    `targetGroupArn=${tgConfig.arn},containerName=${cfg.targetContainer},containerPort=${cfg.targetPort}`,
+    `targetGroupArn=${tgConfig.arn},containerName=${sharedCfg.targetContainer},containerPort=${sharedCfg.targetPort}`,
     '--tags',
     `ephemeral=true,ephemeralEnvName=${cfg.envName}`,
   ])
@@ -464,8 +489,12 @@ export function runEcsCli(
   return true
 }
 
-export async function destroyEphemeralTargetGroups(cfg: EphemeralEnvConfig) {
-  const elbClient = new ElasticLoadBalancingV2Client({ region: cfg.region })
+export async function destroyEphemeralTargetGroups(
+  sharedCfg: EphemeralSharedConfig
+) {
+  const elbClient = new ElasticLoadBalancingV2Client({
+    region: sharedCfg.region,
+  })
   // get all target groups as deleting the ecs service and rule
   // disassociates the target group from the ALB
   const dtgCmd = new DescribeTargetGroupsCommand({})
@@ -493,10 +522,12 @@ export async function destroyEphemeralTargetGroups(cfg: EphemeralEnvConfig) {
   }
 }
 
-export async function destroyEphemeralRules(cfg: EphemeralEnvConfig) {
-  const elbClient = new ElasticLoadBalancingV2Client({ region: cfg.region })
+export async function destroyEphemeralRules(sharedCfg: EphemeralSharedConfig) {
+  const elbClient = new ElasticLoadBalancingV2Client({
+    region: sharedCfg.region,
+  })
   const drCmd = new DescribeRulesCommand({
-    ListenerArn: cfg.albListenerArn,
+    ListenerArn: sharedCfg.albListenerArn,
   })
 
   const existingRules = await elbClient.send(drCmd)
@@ -524,8 +555,47 @@ export async function destroyEphemeralRules(cfg: EphemeralEnvConfig) {
   }
 }
 
-export async function destroyEphemeralServices(cfg: EphemeralEnvConfig) {
-  const ecsClient = new ECSClient({ region: cfg.region })
+export async function destroyDns(
+  cfg: EphemeralEnvConfig,
+  sharedCfg: EphemeralSharedConfig
+) {
+  const albCfg = await findAlb(sharedCfg)
+  const client = new Route53Client({ region: sharedCfg.region })
+
+  const changes = cfg.envDomains.map(name => {
+    return {
+      Action: 'DELETE',
+      ResourceRecordSet: {
+        Name: name,
+        Type: 'A',
+        AliasTarget: {
+          HostedZoneId: albCfg.canonicalHostedZoneId,
+          DNSName: `dualstack.${albCfg.dnsName}`,
+          EvaluateTargetHealth: false,
+        },
+      },
+    }
+  })
+  const rrCmd = new ChangeResourceRecordSetsCommand({
+    HostedZoneId: sharedCfg.hostedZoneId,
+    ChangeBatch: {
+      Changes: changes,
+    },
+  })
+  try {
+    const rrData = await client.send(rrCmd)
+    console.log('rrData', rrData)
+    return Promise.resolve(rrData.ChangeInfo?.Status)
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
+
+export async function destroyEphemeralServices(
+  sharedCfg: EphemeralSharedConfig,
+  getEphemeralConfig: GetEphemeralEnvConfigFunction
+) {
+  const ecsClient = new ECSClient({ region: sharedCfg.region })
 
   const lcCmd = new ListClustersCommand({
     maxResults: 100,
@@ -540,11 +610,11 @@ export async function destroyEphemeralServices(cfg: EphemeralEnvConfig) {
   const clusters = await ecsClient.send(dcCmd)
 
   const ephemeralCluster = clusters.clusters?.find(
-    cluster => cluster.clusterName === cfg.clusterName
+    cluster => cluster.clusterName === sharedCfg.clusterName
   )
 
   if (ephemeralCluster === undefined) {
-    console.log(`Cannot find ephemeral cluster '${cfg.clusterName}'`)
+    console.log(`Cannot find ephemeral cluster '${sharedCfg.clusterName}'`)
     return
   }
 
@@ -577,6 +647,14 @@ export async function destroyEphemeralServices(cfg: EphemeralEnvConfig) {
   )
   if (ephemeralServices !== undefined) {
     for (const svc of ephemeralServices) {
+      const envName = svc.tags?.find(tag => tag.key === 'ephemeralEnvName')
+        ?.value
+      if (envName !== undefined) {
+        const envCfg = getEphemeralConfig(envName)
+        await destroyDns(envCfg, sharedCfg)
+      } else {
+        console.warn(`Cannot find envName for service: ${svc}`)
+      }
       const updateService = new UpdateServiceCommand({
         cluster: clusterArn,
         service: svc.serviceArn,
@@ -592,8 +670,11 @@ export async function destroyEphemeralServices(cfg: EphemeralEnvConfig) {
   }
 }
 
-export async function teardownEphemeral(cfg: EphemeralEnvConfig) {
-  await destroyEphemeralServices(cfg)
-  await destroyEphemeralRules(cfg)
-  await destroyEphemeralTargetGroups(cfg)
+export async function teardownEphemeral(
+  sharedCfg: EphemeralSharedConfig,
+  getEphemeralConfig: GetEphemeralEnvConfigFunction
+) {
+  await destroyEphemeralServices(sharedCfg, getEphemeralConfig)
+  await destroyEphemeralRules(sharedCfg)
+  await destroyEphemeralTargetGroups(sharedCfg)
 }

@@ -1,8 +1,9 @@
 import {
-  startMilmoveBuild,
-  startMilmoveTeardown,
   EphemeralEnvConfig,
+  EphemeralSharedConfig,
   BuildConfig,
+  startBuild,
+  startTeardown,
 } from './ephemeral'
 export type ProjectConfig = {
   pull_url_prefix: string
@@ -27,25 +28,13 @@ export function getProjectConfig(): AllProjectConfig {
 // return markdown info for the deploy
 export function infoForMilmoveDeploy(pr: string): string {
   const envName = `milmove-pr-${pr}`
-  const cfg = getMilmoveEphemeralConfig(envName, 'region')
+  const cfg = getMilmoveEphemeralConfig(envName)
   return cfg.envDomains.map(envDom => ` * <https://${envDom}>`).join('\n')
 }
 
-export function getMilmoveEphemeralConfig(
-  envName: string,
-  region: string
-): EphemeralEnvConfig {
-  const envBaseDomain = `${envName}.mymove.sandbox.truss.coffee`
+export function getMilmoveSharedConfig(region: string): EphemeralSharedConfig {
   return {
-    envName: envName,
     region: region,
-    envBaseDomain: envBaseDomain,
-    envDomains: [
-      `my-${envBaseDomain}`,
-      `admin-${envBaseDomain}`,
-      `office-${envBaseDomain}`,
-      `prime-${envBaseDomain}`,
-    ],
     clusterName: 'milmove-ephemeral',
     subnetIds: [
       // these are the new private subnets
@@ -68,4 +57,30 @@ export function getMilmoveEphemeralConfig(
     albListenerArn:
       'arn:aws:elasticloadbalancing:us-west-2:004351505091:listener/app/milmove-ephemeral-envs/80873cf1e844f0e7/137da1f108d3511a',
   }
+}
+
+export function getMilmoveEphemeralConfig(envName: string): EphemeralEnvConfig {
+  const envBaseDomain = `${envName}.mymove.sandbox.truss.coffee`
+  return {
+    envName: envName,
+    envBaseDomain: envBaseDomain,
+    envDomains: [
+      `my-${envBaseDomain}`,
+      `admin-${envBaseDomain}`,
+      `office-${envBaseDomain}`,
+      `prime-${envBaseDomain}`,
+    ],
+  }
+}
+
+export async function startMilmoveTeardown(cfg: BuildConfig): Promise<string> {
+  return startTeardown(cfg, 'milmove')
+}
+
+export async function startMilmoveBuild(
+  cfg: BuildConfig,
+  pr: string,
+  token: string
+): Promise<string> {
+  return startBuild(cfg, 'milmove', pr, token)
 }

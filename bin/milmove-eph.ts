@@ -1,5 +1,8 @@
 import { createEphemeralExistingAlb, runEcsCli } from '../src/ephemeral'
-import { getMilmoveEphemeralConfig } from '../src/project_config'
+import {
+  getMilmoveSharedConfig,
+  getMilmoveEphemeralConfig,
+} from '../src/project_config'
 
 async function main() {
   const region = process.env['AWS_REGION']
@@ -18,15 +21,16 @@ async function main() {
     process.exit(1)
   }
 
-  const cfg = getMilmoveEphemeralConfig(envName, region)
+  const sharedCfg = getMilmoveSharedConfig(region)
+  const cfg = getMilmoveEphemeralConfig(envName)
 
   try {
-    const tgConfig = await createEphemeralExistingAlb(cfg)
+    const tgConfig = await createEphemeralExistingAlb(cfg, sharedCfg)
     console.log(tgConfig)
 
     process.chdir(ecsCliDeployDir)
 
-    if (!runEcsCli(cfg, tgConfig)) {
+    if (!runEcsCli(cfg, sharedCfg, tgConfig)) {
       console.log('ecs-cli error')
       process.exit(1)
     }

@@ -1,5 +1,8 @@
 import { teardownEphemeral } from '../src/ephemeral'
-import { getMilmoveEphemeralConfig } from '../src/project_config'
+import {
+  getMilmoveSharedConfig,
+  getMilmoveEphemeralConfig,
+} from '../src/project_config'
 
 async function main() {
   const region = process.env['AWS_REGION']
@@ -8,10 +11,13 @@ async function main() {
     process.exit(1)
   }
 
-  const cfg = getMilmoveEphemeralConfig('destroy', region)
+  const sharedCfg = getMilmoveSharedConfig(region)
 
   try {
-    const tgConfig = await teardownEphemeral(cfg)
+    const tgConfig = await teardownEphemeral(
+      sharedCfg,
+      getMilmoveEphemeralConfig
+    )
     console.log(tgConfig)
   } catch (error) {
     console.log('error', error)
