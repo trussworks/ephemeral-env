@@ -96,7 +96,7 @@ describe('respondToEvent', () => {
       event: {
         type: 'app_mention',
         user: 'user',
-        text: 'deploy <https://github.com/transcom/mymove/pull/123>',
+        text: '<BOTUSER> deploy <https://github.com/transcom/mymove/pull/123>',
         ts: 'fake_ts',
         channel: 'fake_channel',
         event_ts: 'fake_event_ts',
@@ -124,8 +124,8 @@ describe('respondToEvent', () => {
         {
           channel: mentionEvent.event.channel,
           thread_ts: mentionEvent.event.ts,
-          fallback: 'Starting deploy',
-          markdown: 'Starting deploy',
+          fallback: 'Starting deploy for milmove',
+          markdown: 'Starting deploy for milmove',
         },
       ],
     ])

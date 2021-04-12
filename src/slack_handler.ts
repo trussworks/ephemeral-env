@@ -123,8 +123,9 @@ async function doDeploy(
     winston.log(`Error starting build for ${foundEntry.projectName}`, error)
     return `Error starting build for ${foundEntry.projectName}: ${error}`
   }
-  logger.warn(`Starting deploy for ${foundEntry.projectName}`)
-  return 'Starting deploy'
+  const message = `Starting deploy for ${foundEntry.projectName}`
+  logger.warn(message)
+  return message
 }
 
 function doInfo(
@@ -188,17 +189,28 @@ export async function respondToEvent(
 
   let message: string = helpText
   let markdown: string | undefined = undefined
-  if (mentionEvent.text.includes('deploy ')) {
+
+  const [botUser, command, commandArgs] = mentionEvent.text.split(/\s+/, 3)
+
+  logger.debug('mention parsed', {
+    botUser: botUser,
+    command: command,
+    commandArgs: commandArgs,
+  })
+  if (command === 'deploy') {
     const buildToken = createBuildToken(mentionEvent.channel, mentionEvent.ts)
     message = await doDeploy(
       logger,
-      mentionEvent.text,
+      commandArgs,
       allProjectConfig,
       buildConfig,
       buildToken
     )
-  } else if (mentionEvent.text.includes('info ')) {
-    markdown = doInfo(logger, mentionEvent.text, allProjectConfig)
+  } else if (command === 'info') {
+    message = 'info response'
+    markdown = doInfo(logger, commandArgs, allProjectConfig)
+  } else {
+    logger.debug('Unknown command for text', { text: mentionEvent.text })
   }
 
   if (markdown === undefined) {
@@ -250,6 +262,7 @@ export const slackHandler: APIGatewayProxyHandler = async (
     }
 
     const allProjectConfig = getProjectConfig()
+    logger.debug('Using all project config', allProjectConfig)
 
     const response = await respondToEvent(
       slackConfig,
