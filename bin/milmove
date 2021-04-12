@@ -45,7 +45,7 @@ function do_build() {
     git fetch truss adh-ephemeral-review
     # apply the commit with the changes. If this fails, the build will
     # fail and we can't start the app
-    git cherry-pick 5a8c62a2e --no-commit
+    git cherry-pick 78f9bfdda --no-commit
 
     # HACK: set some environment variables from .envrc
     # could install direnv in AWS build env, but this is less work right
