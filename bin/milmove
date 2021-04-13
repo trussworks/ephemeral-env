@@ -39,13 +39,16 @@ function do_build() {
     GIT_COMMIT=$(git rev-list -1 HEAD)
     export GIT_COMMIT
 
-    # add our private repo with our custom changes
-    git remote add truss https://github.com/trussworks/mymove.git
-    # fetch the branch with the mods needed for an ephemeral app
-    git fetch truss adh-ephemeral-review
-    # apply the commit with the changes. If this fails, the build will
-    # fail and we can't start the app
-    git cherry-pick 78f9bfdda --no-commit
+    if [[ ! -r Dockerfile.reviewapp ]]; then
+        # add our private repo with our custom changes
+        git remote add truss https://github.com/trussworks/mymove.git
+        # fetch the branch with the mods needed for an ephemeral app
+        git fetch truss adh-ephemeral-review
+        # apply the commit with the changes. If this fails, the build will
+        # fail and we can't start the app
+        git cherry-pick 78f9bfdda --no-commit
+        git cherry-pick 08f297154 --no-commit
+    fi
 
     # HACK: set some environment variables from .envrc
     # could install direnv in AWS build env, but this is less work right
