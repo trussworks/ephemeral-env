@@ -29,7 +29,10 @@ export function getProjectConfig(): AllProjectConfig {
 export function infoForMilmoveDeploy(pr: string): string {
   const envName = `milmove-pr-${pr}`
   const cfg = getMilmoveEphemeralConfig(envName)
-  return cfg.envDomains.map(envDom => `* <https://${envDom}>`).join('\n')
+  // seems that slack doesn't support list syntax in app-published
+  // text
+  // https://api.slack.com/reference/surfaces/formatting#block-formatting__lists
+  return cfg.envDomains.map(envDom => `• <https://${envDom}>`).join('\n')
 }
 
 export function getMilmoveSharedConfig(region: string): EphemeralSharedConfig {
