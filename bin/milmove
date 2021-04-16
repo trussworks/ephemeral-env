@@ -40,14 +40,16 @@ function do_build() {
     export GIT_COMMIT
 
     if [[ ! -r Dockerfile.reviewapp ]]; then
-        # add our private repo with our custom changes
-        git remote add truss https://github.com/trussworks/mymove.git
         # fetch the branch with the mods needed for an ephemeral app
-        git fetch truss adh-ephemeral-review
-        # apply the commit with the changes. If this fails, the build will
+        git fetch origin adh-mb-7603-ephemeral-env
+        # apply the commits with the changes. If this fails, the build will
         # fail and we can't start the app
-        git cherry-pick 78f9bfdda --no-commit
-        git cherry-pick 6e8fe42fe --no-commit
+        git cherry-pick --no-commit 6150287b6
+        git cherry-pick --no-commit 7c763c411
+        git cherry-pick --no-commit 8d93e7682
+        git cherry-pick --no-commit d27fe5ec5
+        git cherry-pick --no-commit c5a675fec
+        git cherry-pick --no-commit af4c89b10
     fi
 
     # HACK: set some environment variables from .envrc
