@@ -40,16 +40,8 @@ function do_build() {
     export GIT_COMMIT
 
     if [[ ! -r Dockerfile.reviewapp ]]; then
-        # fetch the branch with the mods needed for an ephemeral app
-        git fetch origin adh-mb-7603-ephemeral-env
-        # apply the commits with the changes. If this fails, the build will
-        # fail and we can't start the app
-        git cherry-pick --no-commit 6150287b6
-        git cherry-pick --no-commit 7c763c411
-        git cherry-pick --no-commit 8d93e7682
-        git cherry-pick --no-commit d27fe5ec5
-        git cherry-pick --no-commit c5a675fec
-        git cherry-pick --no-commit 214bba839
+        # rebase onto master to get the reviewapp config
+        git rebase master
     fi
 
     # HACK: set some environment variables from .envrc
