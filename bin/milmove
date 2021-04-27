@@ -40,6 +40,7 @@ function do_build() {
     export GIT_COMMIT
 
     if [[ ! -r Dockerfile.reviewapp ]]; then
+        git fetch origin master
         # apply the commits with the changes. If this fails, the build will
         # fail and we can't start the app
         git cherry-pick --no-commit 6150287b6
