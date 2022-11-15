@@ -112,6 +112,7 @@ function do_build() {
     export CLOUD_FRONT_PRIVATE_KEY=replace
     export CLOUD_FRONT_KEY_ID=replace
 
+    export LOGGING_ENV=review
 
     # HACK: hardcode milmove AWS info
 
