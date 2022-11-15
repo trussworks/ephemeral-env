@@ -39,17 +39,6 @@ function do_build() {
     GIT_COMMIT=$(git rev-list -1 HEAD)
     export GIT_COMMIT
 
-    if [[ ! -r Dockerfile.reviewapp ]]; then
-        # apply the commits with the changes. If this fails, the build will
-        # fail and we can't start the app
-        git cherry-pick --no-commit 6150287b6
-        git cherry-pick --no-commit 7c763c411
-        git cherry-pick --no-commit 8d93e7682
-        git cherry-pick --no-commit d27fe5ec5
-        git cherry-pick --no-commit c5a675fec
-        git cherry-pick --no-commit 214bba839
-    fi
-
     # HACK: set some environment variables from .envrc
     # could install direnv in AWS build env, but this is less work right
     # now
