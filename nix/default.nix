@@ -1,10 +1,6 @@
-# to install
-# nix-env -p /nix/var/nix/profiles/ephemeral-env -f nix -i
+# use ./nix/update.sh to install
 #
-# use
-#
-# https://lazamar.co.uk/nix-versions/
-# to find rev for specific package version
+# use <https://ahobson.github.io/nix-package-search> to find a package version
 
 let
   pkgs = import <nixpkgs> {};
@@ -13,44 +9,42 @@ in buildEnv {
   name = "ephemeral-env-packages";
   paths = [
 
-    (import (builtins.fetchGit {
-      # Descriptive name to make the store path easier to identify
-      name = "awscli2-2.1.7";
-      url = "https://github.com/NixOS/nixpkgs/";
-      ref = "refs/heads/nixpkgs-unstable";
-      rev = "559cf76fa3642106d9f23c9e845baf4d354be682";
-    }) {}).awscli2
+    (import
+      (builtins.fetchGit {
+        # Descriptive name to make the store path easier to identify
+        name = "awscli2-2.2.14";
+        url = "https://github.com/NixOS/nixpkgs/";
+        ref = "refs/heads/nixpkgs-unstable";
+        rev = "14b0f20fa1f56438b74100513c9b1f7c072cf789";
+      })
+      { }).awscli2
 
-    (import (builtins.fetchGit {
-      # Descriptive name to make the store path easier to identify
-      name = "aws-vault-6.2.0";
-      url = "https://github.com/NixOS/nixpkgs/";
-      ref = "refs/heads/nixpkgs-unstable";
-      rev = "559cf76fa3642106d9f23c9e845baf4d354be682";
-    }) {}).aws-vault
+    (import
+      (builtins.fetchGit {
+        # Descriptive name to make the store path easier to identify
+        name = "aws-vault-6.3.1";
+        url = "https://github.com/NixOS/nixpkgs/";
+        ref = "refs/heads/nixpkgs-unstable";
+        rev = "253aecf69ed7595aaefabde779aa6449195bebb7";
+      })
+      { }).aws-vault
 
-    (import (builtins.fetchGit {
-      # Descriptive name to make the store path easier to identify
-      name = "nodejs-12.16.3";
-      url = "https://github.com/NixOS/nixpkgs/";
-      ref = "refs/heads/nixpkgs-unstable";
-      rev = "528d35bec0cb976a06cc0e8487c6e5136400b16b";
-    }) {}).nodejs-12_x
+    (import
+      (builtins.fetchGit {
+        # Descriptive name to make the store path easier to identify
+        name = "nodejs-18.13.0";
+        url = "https://github.com/NixOS/nixpkgs/";
+        ref = "refs/heads/nixpkgs-unstable";
+        rev = "2d38b664b4400335086a713a0036aafaa002c003";
+    }) {}).nodejs-18_x
 
-    (import (builtins.fetchGit {
-      # Descriptive name to make the store path easier to identify
-      name = "yarn-1.22.10";
-      url = "https://github.com/NixOS/nixpkgs/";
-      ref = "refs/heads/nixpkgs-unstable";
-      rev = "559cf76fa3642106d9f23c9e845baf4d354be682";
-    }) {}).yarn
-
-    (import (builtins.fetchGit {
-      # Descriptive name to make the store path easier to identify
-      name = "pre-commit-2.7.1";
-      url = "https://github.com/NixOS/nixpkgs/";
-      ref = "refs/heads/nixpkgs-unstable";
-      rev = "559cf76fa3642106d9f23c9e845baf4d354be682";
+    (import
+      (builtins.fetchGit {
+        # Descriptive name to make the store path easier to identify
+        name = "python3.10-pre-commit-2.20.0";
+        url = "https://github.com/NixOS/nixpkgs/";
+        ref = "refs/heads/nixpkgs-unstable";
+        rev = "cd8d1784506a7c7eb0796772b73437e0b82fad57";
     }) {}).pre-commit
   ];
 }

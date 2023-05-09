@@ -1,8 +1,4 @@
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyHandler,
-  APIGatewayProxyResult,
-} from 'aws-lambda'
+import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda'
 import { default as winston } from 'winston'
 
 import { SlackConfig, getSlackConfig, MessageResponse } from './slack_config'
@@ -27,29 +23,25 @@ export type AppMentionPayloadRequest = {
   event: AppMentionPayloadEvent
 }
 
-function isAppMentionPayloadRequest(e: any): e is AppMentionPayloadRequest {
-  if (
-    e != undefined &&
+function isAppMentionPayloadRequest(e: unknown): e is AppMentionPayloadRequest {
+  return (
+    e !== null &&
     typeof e === 'object' &&
     'event' in e &&
-    typeof e['event'] === 'object'
-  ) {
-    const event = e['event']
-    return (
-      'type' in event &&
-      event['type'] === 'app_mention' &&
-      'user' in event &&
-      'text' in event &&
-      'ts' in event &&
-      'channel' in event &&
-      'event_ts' in event
-    )
-  }
-  return false
+    e['event'] !== null &&
+    typeof e['event'] === 'object' &&
+    'type' in e['event'] &&
+    e['event']['type'] === 'app_mention' &&
+    'user' in e['event'] &&
+    'text' in e['event'] &&
+    'ts' in e['event'] &&
+    'channel' in e['event'] &&
+    'event_ts' in e['event']
+  )
 }
 
 function hasChallengeResponse(
-  event: APIGatewayProxyEvent
+  event: APIGatewayEvent
 ): APIGatewayProxyResult | undefined {
   const req = JSON.parse(event.body || '{}')
   if (
@@ -151,7 +143,7 @@ export async function respondToEvent(
   buildConfig: BuildConfig,
   allProjectConfig: AllProjectConfig,
   logger: winston.Logger,
-  event: APIGatewayProxyEvent
+  event: APIGatewayEvent
 ): Promise<APIGatewayProxyResult> {
   // will throw if verify fails
   try {
@@ -233,11 +225,9 @@ export async function respondToEvent(
   }
 }
 
-export const slackHandler: APIGatewayProxyHandler = async (
-  event,
-  _context,
-  callback
-): Promise<APIGatewayProxyResult> => {
+export async function slackHandler(
+  event: APIGatewayEvent
+): Promise<APIGatewayProxyResult> {
   const logLevel = process.env.LOG_LEVEL || 'info'
   const logFormat =
     process.env.LOG_FORMAT === 'simple'
@@ -275,7 +265,6 @@ export const slackHandler: APIGatewayProxyHandler = async (
     return response
   } catch (error) {
     logger.error('Error', error)
-    callback(error)
     return {
       isBase64Encoded: false,
       statusCode: 500,

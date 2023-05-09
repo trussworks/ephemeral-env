@@ -1,12 +1,17 @@
 module.exports = {
   root: true,
-  env: {
-    node: true,
-  },
-  extends: ['prettier/@typescript-eslint', 'plugin:prettier/recommended'],
-  parser: '@typescript-eslint/parser',
   parserOptions: {
-    sourceType: 'module',
+    project: ['./tsconfig.json'], // Specify it only for TypeScript files
   },
+  parser: '@typescript-eslint/parser',
   plugins: ['@typescript-eslint'],
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+    'prettier',
+  ],
+  rules: {
+    '@typescript-eslint/require-await': 'error',
+    '@typescript-eslint/return-await': 'error',
+  },
 }
