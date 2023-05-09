@@ -11,7 +11,12 @@ Tool to create ephemeral envs
 
 1. Install dependencies
 
+    npm install -g yarn
     yarn
+
+## Deployment
+
+    aws-vault exec $AWS_PROFILE_NAME -- sls deploy -s sandbox
 
 ## Slack Permissions
 
