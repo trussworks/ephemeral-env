@@ -500,24 +500,30 @@ export async function destroyEphemeralTargetGroups(
   const dtgCmd = new DescribeTargetGroupsCommand({})
 
   const existingTgs = await elbClient.send(dtgCmd)
-  const tgArns = existingTgs?.TargetGroups?.map(tg => tg.TargetGroupArn).filter(
-    arn => arn != undefined
-  ) as string[]
-  const dtCmd = new DescribeTagsCommand({
-    ResourceArns: tgArns,
-  })
-  const tgTags = await elbClient.send(dtCmd)
-  const ephemeralTgs = tgTags.TagDescriptions?.filter(
-    tg =>
-      tg.Tags !== undefined &&
-      tg.Tags.find(tag => tag.Key === 'ephemeral' && tag.Value === 'true')
-  )
-  if (ephemeralTgs !== undefined) {
-    for (const tg of ephemeralTgs) {
-      const dtg = new DeleteTargetGroupCommand({
-        TargetGroupArn: tg.ResourceArn,
-      })
-      await elbClient.send(dtg)
+  const allTgArns = existingTgs?.TargetGroups?.map(
+    tg => tg.TargetGroupArn
+  ).filter(arn => arn != undefined) as string[]
+
+  while (allTgArns.length) {
+    // describe tags can have at most 20
+    const tgArns = allTgArns.splice(0, 10)
+
+    const dtCmd = new DescribeTagsCommand({
+      ResourceArns: tgArns,
+    })
+    const tgTags = await elbClient.send(dtCmd)
+    const ephemeralTgs = tgTags.TagDescriptions?.filter(
+      tg =>
+        tg.Tags !== undefined &&
+        tg.Tags.find(tag => tag.Key === 'ephemeral' && tag.Value === 'true')
+    )
+    if (ephemeralTgs !== undefined) {
+      for (const tg of ephemeralTgs) {
+        const dtg = new DeleteTargetGroupCommand({
+          TargetGroupArn: tg.ResourceArn,
+        })
+        await elbClient.send(dtg)
+      }
     }
   }
 }
@@ -531,26 +537,32 @@ export async function destroyEphemeralRules(sharedCfg: EphemeralSharedConfig) {
   })
 
   const existingRules = await elbClient.send(drCmd)
-  const ruleArns = existingRules.Rules?.map(rule => rule.RuleArn).filter(
+  const allRuleArns = existingRules.Rules?.map(rule => rule.RuleArn).filter(
     arn => arn != undefined
   ) as string[]
-  const dtCmd = new DescribeTagsCommand({
-    ResourceArns: ruleArns,
-  })
-  const ruleTags = await elbClient.send(dtCmd)
-  const ephemeralRules = ruleTags.TagDescriptions?.filter(
-    tg =>
-      tg.Tags !== undefined &&
-      tg.Tags.find(tag => tag.Key === 'ephemeral' && tag.Value === 'true')
-  )
-  if (ephemeralRules !== undefined) {
-    for (const rule of ephemeralRules) {
-      console.log('deleting rule', rule)
-      const drc = new DeleteRuleCommand({
-        RuleArn: rule.ResourceArn,
-      })
-      const r = await elbClient.send(drc)
-      console.log('delete rule response', r)
+
+  while (allRuleArns.length) {
+    // describe tags can have at most 20
+    const ruleArns = allRuleArns.splice(0, 10)
+    const dtCmd = new DescribeTagsCommand({
+      ResourceArns: ruleArns,
+    })
+
+    const ruleTags = await elbClient.send(dtCmd)
+    const ephemeralRules = ruleTags.TagDescriptions?.filter(
+      tg =>
+        tg.Tags !== undefined &&
+        tg.Tags.find(tag => tag.Key === 'ephemeral' && tag.Value === 'true')
+    )
+    if (ephemeralRules !== undefined) {
+      for (const rule of ephemeralRules) {
+        console.log('deleting rule', rule)
+        const drc = new DeleteRuleCommand({
+          RuleArn: rule.ResourceArn,
+        })
+        const r = await elbClient.send(drc)
+        console.log('delete rule response', r)
+      }
     }
   }
 }
@@ -584,7 +596,6 @@ export async function destroyDns(
   })
   try {
     const rrData = await client.send(rrCmd)
-    console.log('rrData', rrData)
     return rrData.ChangeInfo?.Status
   } catch (error) {
     return Promise.reject(error)
@@ -630,11 +641,9 @@ export async function destroyEphemeralServices(
     arn => arn != undefined
   ) as string[]
 
-  console.log(`allServiceArns.length: ${allServiceArns.length}`)
   while (allServiceArns.length) {
     // describe services can have at most 10
     const serviceArns = allServiceArns.splice(0, 10)
-    console.log(`serviceArns.length: ${serviceArns.length}`)
 
     const dtCmd = new DescribeServicesCommand({
       cluster: clusterArn,
