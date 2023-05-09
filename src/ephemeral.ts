@@ -208,10 +208,10 @@ async function createAlbRule(
             )
         ) !== undefined
       if (ruleExists) {
-        return Promise.resolve({
+        return {
           albConfig: albConfig,
           tgConfig: tgConfig,
-        })
+        }
       }
       priorityCount += rules.Rules.length
     }
@@ -247,10 +247,10 @@ async function createAlbRule(
   } catch (error) {
     return Promise.reject(error)
   }
-  return Promise.resolve({
+  return {
     albConfig: albConfig,
     tgConfig: tgConfig,
-  })
+  }
 }
 
 export async function setupDns(
@@ -285,7 +285,7 @@ export async function setupDns(
   try {
     const rrData = await client.send(rrCmd)
     console.log('rrData', rrData)
-    return Promise.resolve(rrData.ChangeInfo?.Status)
+    return rrData.ChangeInfo?.Status
   } catch (error) {
     return Promise.reject(error)
   }
@@ -300,7 +300,7 @@ export async function createEphemeralExistingAlb(
     console.log('albAndTgConfig', albAndTgConfig)
     const rrStatus = await setupDns(cfg, sharedCfg, albAndTgConfig.albConfig)
     console.log('rrStatus', rrStatus)
-    return Promise.resolve(albAndTgConfig.tgConfig)
+    return albAndTgConfig.tgConfig
   } catch (error) {
     return Promise.reject(error)
   }
@@ -335,9 +335,9 @@ export async function startBuild(
       buildResult.build === undefined ||
       buildResult.build.arn === undefined
     ) {
-      return Promise.reject('Error starting build')
+      return await Promise.reject('Error starting build')
     }
-    return Promise.resolve(buildResult.build.arn)
+    return buildResult.build.arn
   } catch (error) {
     return Promise.reject(error)
   }
@@ -363,9 +363,9 @@ export async function startTeardown(
       buildResult.build === undefined ||
       buildResult.build.arn === undefined
     ) {
-      return Promise.reject('Error starting build')
+      return await Promise.reject('Error starting build')
     }
-    return Promise.resolve(buildResult.build.arn)
+    return buildResult.build.arn
   } catch (error) {
     return Promise.reject(error)
   }
@@ -421,9 +421,9 @@ type EcsParams = {
   run_params?: object
 }
 
-function isValidEcsParams(ecsParams: any): ecsParams is EcsParams {
+function isValidEcsParams(ecsParams: unknown): ecsParams is EcsParams {
   return (
-    ecsParams !== undefined &&
+    ecsParams !== null &&
     typeof ecsParams === 'object' &&
     'task_definition' in ecsParams &&
     typeof ecsParams['task_definition'] === 'object'
@@ -585,7 +585,7 @@ export async function destroyDns(
   try {
     const rrData = await client.send(rrCmd)
     console.log('rrData', rrData)
-    return Promise.resolve(rrData.ChangeInfo?.Status)
+    return rrData.ChangeInfo?.Status
   } catch (error) {
     return Promise.reject(error)
   }
@@ -626,46 +626,52 @@ export async function destroyEphemeralServices(
   })
 
   const existingServices = await ecsClient.send(dsCmd)
-  const serviceArns = existingServices.serviceArns?.filter(
+  const allServiceArns = existingServices.serviceArns?.filter(
     arn => arn != undefined
   ) as string[]
-  if (serviceArns.length === 0) {
-    // no services to tear down
-    return
-  }
-  const dtCmd = new DescribeServicesCommand({
-    cluster: clusterArn,
-    services: serviceArns,
-    include: [ServiceField.TAGS],
-  })
-  const servicesWithTags = await ecsClient.send(dtCmd)
-  const ephemeralServices = servicesWithTags.services?.filter(
-    service =>
-      service != undefined &&
-      service.tags !== undefined &&
-      service.tags.find(tag => tag.key === 'ephemeral' && tag.value === 'true')
-  )
-  if (ephemeralServices !== undefined) {
-    for (const svc of ephemeralServices) {
-      const envName = svc.tags?.find(tag => tag.key === 'ephemeralEnvName')
-        ?.value
-      if (envName !== undefined) {
-        const envCfg = getEphemeralConfig(envName)
-        await destroyDns(envCfg, sharedCfg)
-      } else {
-        console.warn(`Cannot find envName for service: ${svc}`)
+
+  console.log(`allServiceArns.length: ${allServiceArns.length}`)
+  while (allServiceArns.length) {
+    // describe services can have at most 10
+    const serviceArns = allServiceArns.splice(0, 10)
+    console.log(`serviceArns.length: ${serviceArns.length}`)
+
+    const dtCmd = new DescribeServicesCommand({
+      cluster: clusterArn,
+      services: serviceArns,
+      include: [ServiceField.TAGS],
+    })
+    const servicesWithTags = await ecsClient.send(dtCmd)
+    const ephemeralServices = servicesWithTags.services?.filter(
+      service =>
+        service != undefined &&
+        service.tags !== undefined &&
+        service.tags.find(
+          tag => tag.key === 'ephemeral' && tag.value === 'true'
+        )
+    )
+    if (ephemeralServices !== undefined) {
+      for (const svc of ephemeralServices) {
+        const envName = svc.tags?.find(tag => tag.key === 'ephemeralEnvName')
+          ?.value
+        if (envName !== undefined) {
+          const envCfg = getEphemeralConfig(envName)
+          await destroyDns(envCfg, sharedCfg)
+        } else {
+          console.warn(`Cannot find envName for service: ${svc}`)
+        }
+        const updateService = new UpdateServiceCommand({
+          cluster: clusterArn,
+          service: svc.serviceArn,
+          desiredCount: 0,
+        })
+        await ecsClient.send(updateService)
+        const delService = new DeleteServiceCommand({
+          cluster: clusterArn,
+          service: svc.serviceArn,
+        })
+        await ecsClient.send(delService)
       }
-      const updateService = new UpdateServiceCommand({
-        cluster: clusterArn,
-        service: svc.serviceArn,
-        desiredCount: 0,
-      })
-      await ecsClient.send(updateService)
-      const delService = new DeleteServiceCommand({
-        cluster: clusterArn,
-        service: svc.serviceArn,
-      })
-      await ecsClient.send(delService)
     }
   }
 }

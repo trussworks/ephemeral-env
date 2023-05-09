@@ -4,3 +4,5 @@
 /milmove_pr
 /.envrc.local
 /.serverless
+/.build/
+/.nix-hash

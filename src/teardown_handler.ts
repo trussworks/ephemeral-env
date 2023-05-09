@@ -14,11 +14,7 @@ export async function handleEvent(
   }
 }
 
-export const teardownHandler: ScheduledHandler = async (
-  event,
-  _context,
-  _callback
-) => {
+export const teardownHandler: ScheduledHandler = async event => {
   const logLevel = process.env.LOG_LEVEL || 'info'
   const logFormat =
     process.env.LOG_FORMAT === 'simple'

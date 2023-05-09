@@ -66,11 +66,7 @@ export async function handleEvent(
   }
 }
 
-export const cloudwatchHandler: CodeBuildCloudWatchStateHandler = async (
-  event,
-  _context,
-  _callback
-) => {
+export const cloudwatchHandler: CodeBuildCloudWatchStateHandler = async event => {
   const logLevel = process.env.LOG_LEVEL || 'info'
   const logFormat =
     process.env.LOG_FORMAT === 'simple'
